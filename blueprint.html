@@ -1,0 +1,1200 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Supervisor Multi-Agent Architecture Blueprint</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: 'Inter', sans-serif;
+    background: #0a0a0f;
+    color: #e0e0e8;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* Background grid */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image:
+      linear-gradient(rgba(255,255,255,0.02) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255,255,255,0.02) 1px, transparent 1px);
+    background-size: 40px 40px;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  /* Ambient glow */
+  body::after {
+    content: '';
+    position: fixed;
+    top: -200px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 800px;
+    height: 600px;
+    background: radial-gradient(ellipse, rgba(99,102,241,0.08) 0%, transparent 70%);
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .container {
+    position: relative;
+    z-index: 1;
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 48px 32px;
+  }
+
+  /* ── Header ── */
+  .header {
+    text-align: center;
+    margin-bottom: 56px;
+  }
+
+  .header-label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    font-weight: 500;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    color: #6366f1;
+    margin-bottom: 12px;
+  }
+
+  .header h1 {
+    font-size: 32px;
+    font-weight: 700;
+    letter-spacing: -0.5px;
+    background: linear-gradient(135deg, #e0e0e8 0%, #8b8b9e 100%);
+    background-clip: text;
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    margin-bottom: 8px;
+  }
+
+  .header p {
+    font-size: 14px;
+    color: #6b6b80;
+    max-width: 600px;
+    margin: 0 auto;
+    line-height: 1.6;
+  }
+
+  /* ── Glass card base ── */
+  .glass {
+    background: linear-gradient(135deg, rgba(255,255,255,0.04) 0%, rgba(255,255,255,0.01) 100%);
+    border: 1px solid rgba(255,255,255,0.06);
+    border-radius: 16px;
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+  }
+
+  .glass-inner {
+    background: linear-gradient(135deg, rgba(255,255,255,0.03) 0%, rgba(255,255,255,0.005) 100%);
+    border: 1px solid rgba(255,255,255,0.05);
+    border-radius: 12px;
+  }
+
+  /* ── Section titles ── */
+  .section-label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    font-weight: 500;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: #4b4b60;
+    margin-bottom: 16px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .section-label::before {
+    content: '';
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    display: inline-block;
+  }
+
+  /* ── User input ── */
+  .user-block {
+    padding: 24px 28px;
+    margin-bottom: 20px;
+    text-align: center;
+  }
+
+  .user-block .section-label::before { background: #22c55e; box-shadow: 0 0 8px rgba(34,197,94,0.4); }
+
+  .user-prompt {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 13px;
+    color: #a5a5b8;
+    padding: 12px 20px;
+    background: rgba(0,0,0,0.3);
+    border: 1px solid rgba(255,255,255,0.04);
+    border-radius: 8px;
+    display: inline-block;
+    margin-top: 4px;
+  }
+
+  /* ── Flow connector lines ── */
+  .flow-connector {
+    display: flex;
+    justify-content: center;
+    padding: 6px 0;
+  }
+
+  .flow-line {
+    width: 2px;
+    height: 32px;
+    background: linear-gradient(180deg, rgba(99,102,241,0.4) 0%, rgba(99,102,241,0.1) 100%);
+    border-radius: 1px;
+  }
+
+  .flow-arrow {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+  }
+
+  .flow-arrow .flow-line { height: 24px; }
+
+  .flow-arrow-head {
+    width: 0;
+    height: 0;
+    border-left: 5px solid transparent;
+    border-right: 5px solid transparent;
+    border-top: 6px solid rgba(99,102,241,0.4);
+  }
+
+  .flow-label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 9px;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    color: #4b4b60;
+    margin-top: 2px;
+  }
+
+  /* ── Supervisor ── */
+  .supervisor-block {
+    padding: 28px 32px;
+    margin-bottom: 20px;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .supervisor-block::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 2px;
+    background: linear-gradient(90deg, transparent, #6366f1, transparent);
+  }
+
+  .supervisor-block .section-label::before { background: #6366f1; box-shadow: 0 0 8px rgba(99,102,241,0.4); }
+
+  .supervisor-content {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+    margin-top: 16px;
+  }
+
+  .supervisor-info h3 {
+    font-size: 18px;
+    font-weight: 600;
+    margin-bottom: 8px;
+    color: #c4c4d4;
+  }
+
+  .supervisor-info p {
+    font-size: 12px;
+    color: #6b6b80;
+    line-height: 1.7;
+  }
+
+  .prompt-box {
+    padding: 16px 20px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    line-height: 1.7;
+    color: #8b8b9e;
+  }
+
+  .prompt-box .prompt-key {
+    color: #6366f1;
+    font-weight: 500;
+  }
+
+  .prompt-box .prompt-val {
+    color: #a5a5b8;
+  }
+
+  /* ── Tool call decision ── */
+  .decision-block {
+    padding: 20px 28px;
+    margin-bottom: 20px;
+    text-align: center;
+  }
+
+  .decision-block .section-label::before { background: #f59e0b; box-shadow: 0 0 8px rgba(245,158,11,0.4); }
+
+  .decision-diamond {
+    display: inline-flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 24px;
+    background: rgba(245,158,11,0.06);
+    border: 1px solid rgba(245,158,11,0.15);
+    border-radius: 8px;
+    margin-top: 4px;
+  }
+
+  .decision-diamond .diamond-icon {
+    width: 20px;
+    height: 20px;
+    background: rgba(245,158,11,0.15);
+    border: 1px solid rgba(245,158,11,0.3);
+    transform: rotate(45deg);
+    border-radius: 3px;
+    flex-shrink: 0;
+  }
+
+  .decision-diamond span {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    color: #f59e0b;
+  }
+
+  /* ── Parallel fan-out ── */
+  .fanout-indicator {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    padding: 8px 0;
+    gap: 12px;
+  }
+
+  .fanout-branch {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+
+  .fanout-h-line {
+    height: 2px;
+    background: rgba(99,102,241,0.2);
+    flex: 1;
+  }
+
+  .fanout-label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 9px;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    color: #6366f1;
+    padding: 4px 12px;
+    background: rgba(99,102,241,0.08);
+    border: 1px solid rgba(99,102,241,0.15);
+    border-radius: 4px;
+  }
+
+  .fanout-lines {
+    display: flex;
+    justify-content: center;
+    padding: 0 60px;
+    margin-bottom: 8px;
+  }
+
+  .fanout-lines-inner {
+    display: flex;
+    width: 100%;
+    max-width: 900px;
+    justify-content: space-between;
+    position: relative;
+  }
+
+  .fanout-lines-inner::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: calc(16.66%);
+    right: calc(16.66%);
+    height: 2px;
+    background: rgba(99,102,241,0.15);
+  }
+
+  .fanout-vert {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    flex: 1;
+  }
+
+  .fanout-vert .flow-line {
+    height: 20px;
+    background: rgba(99,102,241,0.2);
+  }
+
+  /* ── Specialists grid ── */
+  .specialists-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 16px;
+    margin-bottom: 20px;
+  }
+
+  .specialist-card {
+    padding: 24px 20px;
+    position: relative;
+    overflow: hidden;
+    transition: border-color 0.3s;
+  }
+
+  .specialist-card:hover {
+    border-color: rgba(255,255,255,0.1);
+  }
+
+  .specialist-card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 2px;
+  }
+
+  .specialist-card.math::before { background: linear-gradient(90deg, transparent, #ec4899, transparent); }
+  .specialist-card.text::before { background: linear-gradient(90deg, transparent, #06b6d4, transparent); }
+  .specialist-card.util::before { background: linear-gradient(90deg, transparent, #10b981, transparent); }
+
+  .specialist-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 12px;
+  }
+
+  .specialist-icon {
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 15px;
+    flex-shrink: 0;
+  }
+
+  .math .specialist-icon { background: rgba(236,72,153,0.1); border: 1px solid rgba(236,72,153,0.2); }
+  .text .specialist-icon { background: rgba(6,182,212,0.1); border: 1px solid rgba(6,182,212,0.2); }
+  .util .specialist-icon { background: rgba(16,185,129,0.1); border: 1px solid rgba(16,185,129,0.2); }
+
+  .specialist-name {
+    font-size: 14px;
+    font-weight: 600;
+    color: #c4c4d4;
+  }
+
+  .specialist-subtitle {
+    font-size: 11px;
+    color: #4b4b60;
+    font-family: 'JetBrains Mono', monospace;
+  }
+
+  .specialist-prompt {
+    font-size: 11px;
+    color: #6b6b80;
+    line-height: 1.6;
+    margin-bottom: 14px;
+    padding: 10px 12px;
+    background: rgba(0,0,0,0.2);
+    border-radius: 6px;
+    border-left: 2px solid rgba(255,255,255,0.05);
+  }
+
+  .specialist-tools {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+  }
+
+  .tool-tag {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    padding: 3px 8px;
+    border-radius: 4px;
+    background: rgba(255,255,255,0.03);
+    border: 1px solid rgba(255,255,255,0.06);
+    color: #8b8b9e;
+  }
+
+  .math .tool-tag { border-color: rgba(236,72,153,0.15); color: rgba(236,72,153,0.7); }
+  .text .tool-tag { border-color: rgba(6,182,212,0.15); color: rgba(6,182,212,0.7); }
+  .util .tool-tag { border-color: rgba(16,185,129,0.15); color: rgba(16,185,129,0.7); }
+
+  /* ── MCP layer ── */
+  .mcp-block {
+    padding: 20px 28px;
+    margin-bottom: 20px;
+  }
+
+  .mcp-block .section-label::before { background: #8b5cf6; box-shadow: 0 0 8px rgba(139,92,246,0.4); }
+
+  .mcp-content {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    margin-top: 8px;
+  }
+
+  .mcp-diagram {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex: 1;
+  }
+
+  .mcp-node {
+    padding: 10px 16px;
+    border-radius: 8px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    white-space: nowrap;
+  }
+
+  .mcp-node.server {
+    background: rgba(139,92,246,0.08);
+    border: 1px solid rgba(139,92,246,0.2);
+    color: #8b5cf6;
+  }
+
+  .mcp-node.transport {
+    background: rgba(255,255,255,0.02);
+    border: 1px solid rgba(255,255,255,0.06);
+    color: #6b6b80;
+    font-size: 10px;
+  }
+
+  .mcp-arrow {
+    color: #4b4b60;
+    font-size: 14px;
+  }
+
+  .mcp-desc {
+    font-size: 12px;
+    color: #6b6b80;
+    line-height: 1.6;
+    flex: 1;
+  }
+
+  /* ── Response synthesis ── */
+  .synthesis-block {
+    padding: 24px 28px;
+    margin-bottom: 20px;
+  }
+
+  .synthesis-block .section-label::before { background: #6366f1; box-shadow: 0 0 8px rgba(99,102,241,0.4); }
+
+  .synthesis-steps {
+    display: flex;
+    gap: 16px;
+    margin-top: 8px;
+  }
+
+  .synthesis-step {
+    flex: 1;
+    padding: 14px 16px;
+    text-align: center;
+  }
+
+  .step-number {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 18px;
+    font-weight: 600;
+    color: rgba(99,102,241,0.4);
+    margin-bottom: 6px;
+  }
+
+  .step-text {
+    font-size: 12px;
+    color: #8b8b9e;
+    line-height: 1.5;
+  }
+
+  .step-arrow {
+    display: flex;
+    align-items: center;
+    color: #4b4b60;
+    font-size: 16px;
+    flex-shrink: 0;
+    padding: 0 4px;
+  }
+
+  /* ── Output ── */
+  .output-block {
+    padding: 24px 28px;
+    text-align: center;
+  }
+
+  .output-block .section-label::before { background: #22c55e; box-shadow: 0 0 8px rgba(34,197,94,0.4); }
+
+  .output-example {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    color: #a5a5b8;
+    padding: 14px 24px;
+    background: rgba(0,0,0,0.3);
+    border: 1px solid rgba(34,197,94,0.1);
+    border-radius: 8px;
+    display: inline-block;
+    margin-top: 4px;
+    text-align: left;
+    line-height: 1.7;
+  }
+
+  /* ── Chained example ── */
+  .chained-section {
+    margin-top: 56px;
+    margin-bottom: 20px;
+  }
+
+  .chained-header {
+    text-align: center;
+    margin-bottom: 28px;
+  }
+
+  .chained-header h2 {
+    font-size: 22px;
+    font-weight: 700;
+    color: #c4c4d4;
+    margin-bottom: 6px;
+  }
+
+  .chained-header p {
+    font-size: 13px;
+    color: #6b6b80;
+    max-width: 640px;
+    margin: 0 auto;
+    line-height: 1.6;
+  }
+
+  .timeline {
+    position: relative;
+    padding-left: 32px;
+  }
+
+  .timeline::before {
+    content: '';
+    position: absolute;
+    left: 11px;
+    top: 0;
+    bottom: 0;
+    width: 2px;
+    background: linear-gradient(180deg,
+      rgba(99,102,241,0.3) 0%,
+      rgba(6,182,212,0.3) 25%,
+      rgba(99,102,241,0.3) 50%,
+      rgba(236,72,153,0.3) 75%,
+      rgba(99,102,241,0.3) 100%
+    );
+  }
+
+  .timeline-step {
+    position: relative;
+    margin-bottom: 16px;
+    padding: 16px 20px;
+  }
+
+  .timeline-step:last-child {
+    margin-bottom: 0;
+  }
+
+  .timeline-dot {
+    position: absolute;
+    left: -27px;
+    top: 20px;
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    border: 2px solid;
+  }
+
+  .timeline-step.supervisor-step .timeline-dot {
+    background: rgba(99,102,241,0.3);
+    border-color: #6366f1;
+    box-shadow: 0 0 8px rgba(99,102,241,0.3);
+  }
+
+  .timeline-step.wordsmith-step .timeline-dot {
+    background: rgba(6,182,212,0.3);
+    border-color: #06b6d4;
+    box-shadow: 0 0 8px rgba(6,182,212,0.3);
+  }
+
+  .timeline-step.math-step .timeline-dot {
+    background: rgba(236,72,153,0.3);
+    border-color: #ec4899;
+    box-shadow: 0 0 8px rgba(236,72,153,0.3);
+  }
+
+  .timeline-step.output-step .timeline-dot {
+    background: rgba(34,197,94,0.3);
+    border-color: #22c55e;
+    box-shadow: 0 0 8px rgba(34,197,94,0.3);
+  }
+
+  .timeline-agent {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    font-weight: 500;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    margin-bottom: 6px;
+  }
+
+  .supervisor-step .timeline-agent { color: #6366f1; }
+  .wordsmith-step .timeline-agent { color: #06b6d4; }
+  .math-step .timeline-agent { color: #ec4899; }
+  .output-step .timeline-agent { color: #22c55e; }
+
+  .timeline-action {
+    font-size: 13px;
+    color: #c4c4d4;
+    margin-bottom: 6px;
+  }
+
+  .timeline-detail {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    color: #6b6b80;
+    padding: 8px 12px;
+    background: rgba(0,0,0,0.25);
+    border-radius: 6px;
+    border-left: 2px solid rgba(255,255,255,0.04);
+    line-height: 1.6;
+  }
+
+  .timeline-detail .val { color: #a5a5b8; }
+  .timeline-detail .key { color: #6366f1; }
+  .timeline-detail .result { color: #22c55e; }
+  .timeline-detail .chain-highlight { color: #f59e0b; }
+
+  .loop-badge {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 9px;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    padding: 3px 10px;
+    border-radius: 4px;
+    display: inline-block;
+    margin-bottom: 8px;
+  }
+
+  .loop-1 {
+    background: rgba(6,182,212,0.08);
+    border: 1px solid rgba(6,182,212,0.15);
+    color: #06b6d4;
+  }
+
+  .loop-2 {
+    background: rgba(236,72,153,0.08);
+    border: 1px solid rgba(236,72,153,0.15);
+    color: #ec4899;
+  }
+
+  .vs-block {
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
+    gap: 20px;
+    align-items: center;
+    margin-top: 24px;
+  }
+
+  .vs-card {
+    padding: 20px 24px;
+    text-align: center;
+  }
+
+  .vs-card h4 {
+    font-size: 13px;
+    font-weight: 600;
+    color: #c4c4d4;
+    margin-bottom: 8px;
+  }
+
+  .vs-card p {
+    font-size: 11px;
+    color: #6b6b80;
+    line-height: 1.6;
+  }
+
+  .vs-card .vs-status {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    font-weight: 500;
+    margin-top: 10px;
+    padding: 4px 12px;
+    border-radius: 4px;
+    display: inline-block;
+  }
+
+  .vs-card .vs-pass {
+    background: rgba(34,197,94,0.08);
+    border: 1px solid rgba(34,197,94,0.2);
+    color: #22c55e;
+  }
+
+  .vs-card .vs-fail {
+    background: rgba(239,68,68,0.08);
+    border: 1px solid rgba(239,68,68,0.2);
+    color: #ef4444;
+  }
+
+  .vs-divider {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    font-weight: 600;
+    color: #4b4b60;
+    text-align: center;
+  }
+
+  /* ── Footer legend ── */
+  .legend {
+    margin-top: 40px;
+    padding: 20px 28px;
+  }
+
+  .legend-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 20px;
+    margin-top: 12px;
+  }
+
+  .legend-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+  }
+
+  .legend-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    margin-top: 4px;
+    flex-shrink: 0;
+  }
+
+  .legend-text {
+    font-size: 11px;
+    color: #6b6b80;
+    line-height: 1.5;
+  }
+
+  .legend-text strong {
+    color: #8b8b9e;
+    font-weight: 500;
+    display: block;
+  }
+
+  /* ── Responsive ── */
+  @media (max-width: 768px) {
+    .specialists-grid { grid-template-columns: 1fr; }
+    .supervisor-content { grid-template-columns: 1fr; }
+    .synthesis-steps { flex-direction: column; }
+    .step-arrow { transform: rotate(90deg); justify-content: center; }
+    .legend-grid { grid-template-columns: 1fr; }
+    .fanout-lines { display: none; }
+  }
+</style>
+</head>
+<body>
+
+<div class="container">
+
+  <!-- Header -->
+  <div class="header">
+    <div class="header-label">System Architecture Blueprint</div>
+    <h1>Supervisor Multi-Agent Pattern</h1>
+    <p>LLM-driven orchestration with parallel specialist execution. The supervisor delegates to domain experts via tool calls, synthesizes results into a unified response.</p>
+  </div>
+
+  <!-- 1. User Input -->
+  <div class="glass user-block">
+    <div class="section-label">01 &mdash; User Input</div>
+    <div class="user-prompt">"Calculate 2^10, reverse 'langgraph', and get the current time"</div>
+  </div>
+
+  <div class="flow-connector">
+    <div class="flow-arrow">
+      <div class="flow-line"></div>
+      <div class="flow-arrow-head"></div>
+      <div class="flow-label">passes to</div>
+    </div>
+  </div>
+
+  <!-- 2. Supervisor -->
+  <div class="glass supervisor-block">
+    <div class="section-label">02 &mdash; Supervisor Agent</div>
+    <div class="supervisor-content">
+      <div class="supervisor-info">
+        <h3>ReAct Agent (Orchestrator)</h3>
+        <p>
+          The supervisor is a standard ReAct agent whose only "tools" are the specialist agents, wrapped as <code>@tool</code> functions. It reads the user's request, decides which specialists to invoke, and can call multiple tools in a single response for parallel execution.
+        </p>
+        <p style="margin-top: 8px;">
+          It never sees specialist internals &mdash; only the <code>@tool</code> docstrings. After specialists return, it synthesizes a unified answer.
+        </p>
+      </div>
+      <div class="glass-inner prompt-box">
+        <span class="prompt-key">system_prompt:</span><br>
+        <span class="prompt-val">"You are a supervisor coordinating three specialist agents:</span><br>
+        <span class="prompt-val">&nbsp;&nbsp;- Mathematician: math and calculations</span><br>
+        <span class="prompt-val">&nbsp;&nbsp;- Wordsmith: text processing</span><br>
+        <span class="prompt-val">&nbsp;&nbsp;- Timekeeper: time, UUIDs, dates</span><br><br>
+        <span class="prompt-val">Delegate to the appropriate specialist(s). If the request spans multiple specialties, call multiple specialists in parallel."</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="flow-connector">
+    <div class="flow-arrow">
+      <div class="flow-line"></div>
+      <div class="flow-arrow-head"></div>
+      <div class="flow-label">llm decides</div>
+    </div>
+  </div>
+
+  <!-- 3. Tool Call Decision -->
+  <div class="glass decision-block">
+    <div class="section-label">03 &mdash; Tool Call Decision</div>
+    <div class="decision-diamond">
+      <div class="diamond-icon"></div>
+      <span>LLM emits 1+ tool_calls in a single response &rarr; LangGraph runs them concurrently</span>
+    </div>
+  </div>
+
+  <!-- Parallel fan-out visual -->
+  <div class="flow-connector">
+    <div class="fanout-label">parallel execution</div>
+  </div>
+
+  <div class="fanout-lines">
+    <div class="fanout-lines-inner">
+      <div class="fanout-vert"><div class="flow-line"></div><div class="flow-arrow-head"></div></div>
+      <div class="fanout-vert"><div class="flow-line"></div><div class="flow-arrow-head"></div></div>
+      <div class="fanout-vert"><div class="flow-line"></div><div class="flow-arrow-head"></div></div>
+    </div>
+  </div>
+
+  <!-- 4. Specialist Agents -->
+  <div class="specialists-grid">
+
+    <div class="glass specialist-card math">
+      <div class="specialist-header">
+        <div class="specialist-icon">&Sigma;</div>
+        <div>
+          <div class="specialist-name">Mathematician</div>
+          <div class="specialist-subtitle">ask_mathematician()</div>
+        </div>
+      </div>
+      <div class="specialist-prompt">
+        "You are the Mathematician &mdash; a precise, methodical specialist. Show your work step by step. Only answer the math parts. Silently skip anything outside your specialty."
+      </div>
+      <div class="specialist-tools">
+        <span class="tool-tag">add</span>
+        <span class="tool-tag">multiply</span>
+        <span class="tool-tag">divide</span>
+        <span class="tool-tag">sqrt</span>
+        <span class="tool-tag">power</span>
+        <span class="tool-tag">percentage</span>
+      </div>
+    </div>
+
+    <div class="glass specialist-card text">
+      <div class="specialist-header">
+        <div class="specialist-icon">Aa</div>
+        <div>
+          <div class="specialist-name">Wordsmith</div>
+          <div class="specialist-subtitle">ask_wordsmith()</div>
+        </div>
+      </div>
+      <div class="specialist-prompt">
+        "You are the Wordsmith &mdash; a text processing specialist. You handle word counts, character counts, case conversion, and string reversal. Be concise and accurate."
+      </div>
+      <div class="specialist-tools">
+        <span class="tool-tag">word_count</span>
+        <span class="tool-tag">char_count</span>
+        <span class="tool-tag">to_uppercase</span>
+        <span class="tool-tag">to_lowercase</span>
+        <span class="tool-tag">reverse_text</span>
+      </div>
+    </div>
+
+    <div class="glass specialist-card util">
+      <div class="specialist-header">
+        <div class="specialist-icon">&oplus;</div>
+        <div>
+          <div class="specialist-name">Timekeeper</div>
+          <div class="specialist-subtitle">ask_timekeeper()</div>
+        </div>
+      </div>
+      <div class="specialist-prompt">
+        "You are the Timekeeper &mdash; a utility specialist. You handle time queries, UUID generation, date calculations, and random number generation. Be precise with formats."
+      </div>
+      <div class="specialist-tools">
+        <span class="tool-tag">now</span>
+        <span class="tool-tag">generate_uuid</span>
+        <span class="tool-tag">date_diff</span>
+        <span class="tool-tag">random_number</span>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- 5. MCP Tool Layer -->
+  <div class="glass mcp-block">
+    <div class="section-label">05 &mdash; MCP Tool Server</div>
+    <div class="mcp-content">
+      <div class="mcp-diagram">
+        <div class="mcp-node server">server.py</div>
+        <div class="mcp-arrow">&larr;</div>
+        <div class="mcp-node transport">stdio</div>
+        <div class="mcp-arrow">&rarr;</div>
+        <div class="mcp-node server">MCP Client</div>
+        <div class="mcp-arrow">&rarr;</div>
+        <div class="mcp-node transport">filter_tools()</div>
+        <div class="mcp-arrow">&rarr;</div>
+        <div class="mcp-node server">Specialists</div>
+      </div>
+      <div class="mcp-desc">
+        All 15 tools live in one MCP server. At startup, <code>filter_tools()</code> splits them into subsets so each specialist only sees its own tools.
+      </div>
+    </div>
+  </div>
+
+  <div class="flow-connector">
+    <div class="flow-arrow">
+      <div class="flow-line"></div>
+      <div class="flow-arrow-head"></div>
+      <div class="flow-label">results return</div>
+    </div>
+  </div>
+
+  <!-- 6. Synthesis -->
+  <div class="glass synthesis-block">
+    <div class="section-label">06 &mdash; Response Synthesis</div>
+    <div class="synthesis-steps">
+      <div class="glass-inner synthesis-step">
+        <div class="step-number">1</div>
+        <div class="step-text">Specialist results return as tool call responses to the supervisor</div>
+      </div>
+      <div class="step-arrow">&rarr;</div>
+      <div class="glass-inner synthesis-step">
+        <div class="step-number">2</div>
+        <div class="step-text">Supervisor LLM reads all results and generates a unified, coherent answer</div>
+      </div>
+      <div class="step-arrow">&rarr;</div>
+      <div class="glass-inner synthesis-step">
+        <div class="step-number">3</div>
+        <div class="step-text">Final response appended to conversation memory for future context</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="flow-connector">
+    <div class="flow-arrow">
+      <div class="flow-line"></div>
+      <div class="flow-arrow-head"></div>
+      <div class="flow-label">delivered to user</div>
+    </div>
+  </div>
+
+  <!-- 7. Output -->
+  <div class="glass output-block">
+    <div class="section-label">07 &mdash; Final Response</div>
+    <div class="output-example">
+      <span style="color:#ec4899;">[Mathematician]</span> 2^10 = 1024<br>
+      <span style="color:#06b6d4;">[Wordsmith]</span> "langgraph" reversed is "hparggnal"<br>
+      <span style="color:#10b981;">[Timekeeper]</span> Current time: 2026-02-27 22:10:08 UTC<br><br>
+      <span style="color:#6366f1;">Supervisor synthesized these into one coherent answer.</span>
+    </div>
+  </div>
+
+  <!-- Chained Dependency Example -->
+  <div class="chained-section">
+    <div class="chained-header">
+      <h2>Chained Dependencies: Sequential Execution</h2>
+      <p>When one specialist's output is needed as input for another, the supervisor handles it naturally through its ReAct loop. It calls agents sequentially, threading results between them.</p>
+    </div>
+
+    <!-- Chained user input -->
+    <div class="glass user-block" style="margin-bottom: 20px;">
+      <div class="section-label">Dependent Query</div>
+      <div class="user-prompt">"Count the words in 'Foo Bar Baz', take that count and multiply by 3"</div>
+    </div>
+
+    <div class="flow-connector">
+      <div class="flow-arrow">
+        <div class="flow-line"></div>
+        <div class="flow-arrow-head"></div>
+      </div>
+    </div>
+
+    <!-- Timeline of execution -->
+    <div class="glass" style="padding: 28px 32px; margin-bottom: 20px;">
+      <div class="section-label">Supervisor ReAct Loop &mdash; Sequential Execution Trace</div>
+
+      <div class="timeline">
+
+        <!-- Step 1: Supervisor reasons -->
+        <div class="glass-inner timeline-step supervisor-step">
+          <div class="timeline-dot"></div>
+          <div class="loop-badge loop-1">react loop &mdash; iteration 1</div>
+          <div class="timeline-agent">Supervisor</div>
+          <div class="timeline-action">Analyzes the request, recognizes a dependency chain</div>
+          <div class="timeline-detail">
+            <span class="key">reasoning:</span> <span class="val">"The user wants a word count first, then that result used in a multiplication. I need to call Wordsmith first, wait for the count, then pass it to Mathematician."</span><br>
+            <span class="key">tool_call:</span> <span class="val">ask_wordsmith("Count the words in 'Foo Bar Baz'")</span>
+          </div>
+        </div>
+
+        <!-- Step 2: Wordsmith executes -->
+        <div class="glass-inner timeline-step wordsmith-step">
+          <div class="timeline-dot"></div>
+          <div class="timeline-agent">Wordsmith</div>
+          <div class="timeline-action">Receives request, calls <code>word_count</code> tool, returns result</div>
+          <div class="timeline-detail">
+            <span class="key">input:</span> <span class="val">"Count the words in 'Foo Bar Baz'"</span><br>
+            <span class="key">tool:</span> <span class="val">word_count("Foo Bar Baz")</span><br>
+            <span class="key">return:</span> <span class="result">"The word count of 'Foo Bar Baz' is 3."</span>
+          </div>
+        </div>
+
+        <!-- Step 3: Supervisor receives, chains -->
+        <div class="glass-inner timeline-step supervisor-step">
+          <div class="timeline-dot"></div>
+          <div class="loop-badge loop-2">react loop &mdash; iteration 2</div>
+          <div class="timeline-agent">Supervisor</div>
+          <div class="timeline-action">Reads Wordsmith's result, extracts the count, delegates to Mathematician</div>
+          <div class="timeline-detail">
+            <span class="key">tool_result:</span> <span class="val">"The word count of 'Foo Bar Baz' is 3."</span><br>
+            <span class="key">reasoning:</span> <span class="val">"Word count is <span class="chain-highlight">3</span>. Now I need to multiply <span class="chain-highlight">3</span> &times; 3."</span><br>
+            <span class="key">tool_call:</span> <span class="val">ask_mathematician("Multiply <span class="chain-highlight">3</span> by 3")</span>
+          </div>
+        </div>
+
+        <!-- Step 4: Mathematician executes -->
+        <div class="glass-inner timeline-step math-step">
+          <div class="timeline-dot"></div>
+          <div class="timeline-agent">Mathematician</div>
+          <div class="timeline-action">Receives request with the chained value, calls <code>multiply</code> tool</div>
+          <div class="timeline-detail">
+            <span class="key">input:</span> <span class="val">"Multiply 3 by 3"</span><br>
+            <span class="key">tool:</span> <span class="val">multiply(3, 3)</span><br>
+            <span class="key">return:</span> <span class="result">"3 &times; 3 = 9"</span>
+          </div>
+        </div>
+
+        <!-- Step 5: Supervisor synthesizes -->
+        <div class="glass-inner timeline-step supervisor-step">
+          <div class="timeline-dot"></div>
+          <div class="loop-badge" style="background:rgba(99,102,241,0.08); border:1px solid rgba(99,102,241,0.15); color:#6366f1;">react loop &mdash; iteration 3 (final)</div>
+          <div class="timeline-agent">Supervisor</div>
+          <div class="timeline-action">Both results in hand, synthesizes a unified response</div>
+          <div class="timeline-detail">
+            <span class="key">reasoning:</span> <span class="val">"I have both results. Word count = <span class="chain-highlight">3</span>, and <span class="chain-highlight">3</span> &times; 3 = 9. I can now respond."</span>
+          </div>
+        </div>
+
+        <!-- Step 6: Final output -->
+        <div class="glass-inner timeline-step output-step">
+          <div class="timeline-dot"></div>
+          <div class="timeline-agent">Final Response</div>
+          <div class="timeline-action">Delivered to the user</div>
+          <div class="timeline-detail">
+            <span class="result">"The phrase 'Foo Bar Baz' contains 3 words. Multiplying that count by 3 gives 3 &times; 3 = 9."</span>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- Supervisor vs Fan-out comparison -->
+    <div class="vs-block">
+      <div class="glass vs-card">
+        <h4>Supervisor Pattern</h4>
+        <p>The ReAct loop naturally handles dependencies. The supervisor sees each result before deciding the next step, so it can thread one agent's output into another's input.</p>
+        <div class="vs-status vs-pass">Handles chained queries</div>
+      </div>
+      <div class="vs-divider">vs</div>
+      <div class="glass vs-card">
+        <h4>Fan-Out Pattern</h4>
+        <p>All specialists run in parallel on the original question. The Mathematician never sees the word count because it executes at the same time as the Wordsmith.</p>
+        <div class="vs-status vs-fail">Cannot chain results</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Legend -->
+  <div class="glass legend">
+    <div class="section-label" style="color:#6b6b80;">Key Concepts</div>
+    <div class="legend-grid">
+      <div class="legend-item">
+        <div class="legend-dot" style="background:#6366f1;"></div>
+        <div class="legend-text">
+          <strong>Agents-as-Tools</strong>
+          Each specialist is wrapped as a @tool function with a simple string-in/string-out interface. The supervisor sees only the docstring, never the internals.
+        </div>
+      </div>
+      <div class="legend-item">
+        <div class="legend-dot" style="background:#f59e0b;"></div>
+        <div class="legend-text">
+          <strong>LLM-Driven Parallelism</strong>
+          When the supervisor emits multiple tool calls in one response, LangGraph runs them concurrently. The model decides when to parallelize.
+        </div>
+      </div>
+      <div class="legend-item">
+        <div class="legend-dot" style="background:#22c55e;"></div>
+        <div class="legend-text">
+          <strong>Conversation Memory</strong>
+          Full message history is maintained across turns. The supervisor and specialists can reference earlier exchanges for context.
+        </div>
+      </div>
+      <div class="legend-item">
+        <div class="legend-dot" style="background:#8b5cf6;"></div>
+        <div class="legend-text">
+          <strong>MCP Tool Server</strong>
+          Tools are served via Model Context Protocol over stdio. One server, tools split across specialists at load time via filter_tools().
+        </div>
+      </div>
+      <div class="legend-item">
+        <div class="legend-dot" style="background:#ec4899;"></div>
+        <div class="legend-text">
+          <strong>Context Isolation</strong>
+          Specialists never see the supervisor's routing logic. Each gets a clean context with only its system prompt and the user's request.
+        </div>
+      </div>
+      <div class="legend-item">
+        <div class="legend-dot" style="background:#06b6d4;"></div>
+        <div class="legend-text">
+          <strong>Hierarchical Scaling</strong>
+          A specialist can itself be a supervisor with sub-agents. Nest graphs for complex domains without changing the top-level pattern.
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+</body>
+</html>
