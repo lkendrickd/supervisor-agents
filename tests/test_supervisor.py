@@ -1,0 +1,99 @@
+"""Tests for supervisor.py tool routing and filtering logic.
+
+These test the constants and filter_tools() without requiring
+an LLM or MCP server.
+"""
+
+from types import SimpleNamespace
+
+from supervisor import (
+    MATH_TOOL_NAMES,
+    TEXT_TOOL_NAMES,
+    UTILITY_TOOL_NAMES,
+    filter_tools,
+)
+
+
+# All tool names that the MCP server exposes (must stay in sync with server.py).
+ALL_TOOL_NAMES = {
+    "add",
+    "multiply",
+    "sqrt",
+    "divide",
+    "power",
+    "percentage",
+    "word_count",
+    "char_count",
+    "to_uppercase",
+    "to_lowercase",
+    "reverse_text",
+    "now",
+    "generate_uuid",
+    "date_diff",
+    "random_number",
+}
+
+
+def _fake_tools(names: set[str]) -> list:
+    """Create fake tool objects with a .name attribute."""
+    return [SimpleNamespace(name=n) for n in names]
+
+
+class TestToolNameSets:
+    def test_no_overlap_math_text(self):
+        assert MATH_TOOL_NAMES & TEXT_TOOL_NAMES == set()
+
+    def test_no_overlap_math_utility(self):
+        assert MATH_TOOL_NAMES & UTILITY_TOOL_NAMES == set()
+
+    def test_no_overlap_text_utility(self):
+        assert TEXT_TOOL_NAMES & UTILITY_TOOL_NAMES == set()
+
+    def test_all_tools_assigned(self):
+        assigned = MATH_TOOL_NAMES | TEXT_TOOL_NAMES | UTILITY_TOOL_NAMES
+        assert assigned == ALL_TOOL_NAMES
+
+    def test_random_number_in_math(self):
+        assert "random_number" in MATH_TOOL_NAMES
+
+    def test_generate_uuid_in_math(self):
+        assert "generate_uuid" in MATH_TOOL_NAMES
+
+    def test_now_in_utility(self):
+        assert "now" in UTILITY_TOOL_NAMES
+
+    def test_date_diff_in_utility(self):
+        assert "date_diff" in UTILITY_TOOL_NAMES
+
+
+class TestFilterTools:
+    def test_filters_correctly(self):
+        all_tools = _fake_tools(ALL_TOOL_NAMES)
+        math_tools = filter_tools(all_tools, MATH_TOOL_NAMES)
+        names = {t.name for t in math_tools}
+        assert names == MATH_TOOL_NAMES
+
+    def test_filters_text(self):
+        all_tools = _fake_tools(ALL_TOOL_NAMES)
+        text_tools = filter_tools(all_tools, TEXT_TOOL_NAMES)
+        names = {t.name for t in text_tools}
+        assert names == TEXT_TOOL_NAMES
+
+    def test_filters_utility(self):
+        all_tools = _fake_tools(ALL_TOOL_NAMES)
+        util_tools = filter_tools(all_tools, UTILITY_TOOL_NAMES)
+        names = {t.name for t in util_tools}
+        assert names == UTILITY_TOOL_NAMES
+
+    def test_empty_names(self):
+        all_tools = _fake_tools(ALL_TOOL_NAMES)
+        assert filter_tools(all_tools, set()) == []
+
+    def test_empty_tools(self):
+        assert filter_tools([], MATH_TOOL_NAMES) == []
+
+    def test_unknown_names_ignored(self):
+        all_tools = _fake_tools({"add", "multiply"})
+        result = filter_tools(all_tools, {"add", "nonexistent"})
+        assert len(result) == 1
+        assert result[0].name == "add"

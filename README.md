@@ -10,9 +10,9 @@ The supervisor is a ReAct agent. Its only "tools" are the three specialists, wra
 
 | Agent | Tools | Purpose |
 |---|---|---|
-| Mathematician | add, multiply, divide, sqrt, power, percentage | Arithmetic, exponentiation, percentages |
+| Mathematician | add, multiply, divide, sqrt, power, percentage, random_number, generate_uuid | Arithmetic, exponentiation, percentages, random numbers, UUIDs |
 | Wordsmith | word_count, char_count, to_uppercase, to_lowercase, reverse_text | Text processing, string manipulation |
-| Timekeeper | now, generate_uuid, date_diff, random_number | Time queries, UUIDs, dates, random numbers |
+| Timekeeper | now, date_diff | Time queries, date calculations |
 
 ### Parallel vs sequential
 

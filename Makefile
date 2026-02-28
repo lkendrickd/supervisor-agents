@@ -1,9 +1,15 @@
 .DEFAULT_GOAL := help
 
-.PHONY: run setup help
+.PHONY: run test lint setup help
 
 run: ## Start the interactive supervisor chat
 	uv run python supervisor.py
+
+test: ## Run unit tests
+	uv run pytest tests/ -v
+
+lint: ## Run ruff format + check
+	uv run ruff format . && uv run ruff check .
 
 setup: ## Install dependencies
 	uv sync

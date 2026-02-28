@@ -13,9 +13,9 @@ HOW IT WORKS (Agents-as-tools / LLM-driven parallelism):
   The model decides when to parallelize.
 
 SPECIALIST AGENTS:
-  - Mathematician — math tools (add, multiply, sqrt, divide, power, percentage)
+  - Mathematician — math/number tools (add, multiply, sqrt, divide, power, percentage, random_number, generate_uuid)
   - Wordsmith     — text tools (word_count, char_count, to_uppercase, to_lowercase, reverse_text)
-  - Timekeeper    — utility tools (now, generate_uuid, date_diff, random_number)
+  - Timekeeper    — temporal tools (now, date_diff)
 
 Run:
   uv run python supervisor.py
@@ -84,7 +84,16 @@ MCP_SERVERS: dict[str, dict[str, Any]] = {
 # ─────────────────────────────────────────────
 
 # Which tools belong to which specialist.
-MATH_TOOL_NAMES = {"add", "multiply", "sqrt", "divide", "power", "percentage"}
+MATH_TOOL_NAMES = {
+    "add",
+    "multiply",
+    "sqrt",
+    "divide",
+    "power",
+    "percentage",
+    "random_number",
+    "generate_uuid",
+}
 TEXT_TOOL_NAMES = {
     "word_count",
     "char_count",
@@ -92,7 +101,7 @@ TEXT_TOOL_NAMES = {
     "to_lowercase",
     "reverse_text",
 }
-UTILITY_TOOL_NAMES = {"now", "generate_uuid", "date_diff", "random_number"}
+UTILITY_TOOL_NAMES = {"now", "date_diff"}
 
 
 def filter_tools(all_tools: list, names: set[str]) -> list:
@@ -122,7 +131,8 @@ def create_specialists(all_tools: list) -> dict:
         tools=math_tools,
         system_prompt="You are the Mathematician — a precise, methodical specialist. "
         "Show your work step by step. You have tools for arithmetic, "
-        "exponentiation, square roots, and percentages. "
+        "exponentiation, square roots, percentages, random number generation, "
+        "and UUID generation. "
         "IMPORTANT: Only answer the math parts of a question. "
         "Silently skip anything outside your specialty — "
         "never say 'I cannot' or mention missing capabilities.",
@@ -144,10 +154,9 @@ def create_specialists(all_tools: list) -> dict:
     timekeeper = create_agent(
         model=llm,
         tools=utility_tools,
-        system_prompt="You are the Timekeeper — a utility specialist. "
-        "You handle time queries, UUID generation, date calculations, "
-        "and random number generation. Be precise with formats. "
-        "IMPORTANT: Only answer the utility parts of a question. "
+        system_prompt="You are the Timekeeper — a temporal specialist. "
+        "You handle time queries and date calculations. Be precise with formats. "
+        "IMPORTANT: Only answer the time/date parts of a question. "
         "Silently skip anything outside your specialty — "
         "never say 'I cannot' or mention missing capabilities.",
         name="Timekeeper",
@@ -194,8 +203,8 @@ def create_supervisor(specialists: dict):
 
     @tool
     async def ask_mathematician(request: str) -> str:
-        """Delegate a math question to the Mathematician specialist.
-        Use for arithmetic, exponentiation, square roots, percentages, and calculations.
+        """Delegate a math/number question to the Mathematician specialist.
+        Use for arithmetic, exponentiation, square roots, percentages, random numbers, and UUIDs.
         """
         result = await mathematician_agent.ainvoke(
             {"messages": [{"role": "user", "content": request}]}
@@ -214,8 +223,8 @@ def create_supervisor(specialists: dict):
 
     @tool
     async def ask_timekeeper(request: str) -> str:
-        """Delegate a utility question to the Timekeeper specialist.
-        Use for current time, UUID generation, date differences, and random numbers.
+        """Delegate a time/date question to the Timekeeper specialist.
+        Use for current time and date differences.
         """
         result = await timekeeper_agent.ainvoke(
             {"messages": [{"role": "user", "content": request}]}
@@ -226,12 +235,18 @@ def create_supervisor(specialists: dict):
         model=llm,
         tools=[ask_mathematician, ask_wordsmith, ask_timekeeper],
         system_prompt="You are a supervisor coordinating three specialist agents:\n"
-        "  - Mathematician: math and calculations\n"
+        "  - Mathematician: math, calculations, random numbers, UUIDs\n"
         "  - Wordsmith: text processing (counts, case, reversal)\n"
-        "  - Timekeeper: time, UUIDs, dates, random numbers\n\n"
-        "For each user request, delegate to the appropriate specialist(s). "
-        "If the request spans multiple specialties, call multiple specialists "
-        "in parallel (make all tool calls in one response). "
+        "  - Timekeeper: current time, date differences\n\n"
+        "For each user request, delegate to the appropriate specialist(s).\n\n"
+        "IMPORTANT — before calling specialists, check for dependencies:\n"
+        "  - If one specialist's INPUT requires another specialist's OUTPUT, "
+        "call them sequentially. Wait for the first result, then pass it "
+        "to the second. Example: 'get the time and count its characters' "
+        "means Timekeeper first, then Wordsmith with the time string.\n"
+        "  - Only call specialists in parallel when their inputs are fully "
+        "independent. Example: 'calculate 2^10 and reverse hello' — "
+        "neither needs the other's result.\n\n"
         "Synthesize their answers into a single coherent response.",
         name="Supervisor",
     )
@@ -272,10 +287,9 @@ async def main():
             "[bold]Parallel[/bold] (independent tasks, agents run concurrently):\n"
             "  \"Calculate 2^10 and count the words in 'hello world'\"  → Mathematician + Wordsmith\n"
             '  "What time is it and what is the square root of 144?"   → Timekeeper + Mathematician\n'
-            "  \"Multiply 7 by 8, uppercase 'hello', and get the time\" → all three\n\n"
+            "  \"Multiply 7 by 8, uppercase 'hello', and get the time\" → Mathematician + Wordsmith + Timekeeper\n\n"
             "[bold]Chained[/bold] (result from one agent feeds into another):\n"
             "  \"Count the words in 'Foo Bar Baz' and multiply that count by 3\" → Wordsmith then Mathematician\n"
-            '  "Generate a random number and raise it to the power of 2"        → Timekeeper then Mathematician\n'
             '  "Get the current time and count the characters in it"            → Timekeeper then Wordsmith',
             title="Supervisor Agent",
             border_style="blue",

@@ -858,9 +858,9 @@
       <div class="glass-inner prompt-box">
         <span class="prompt-key">system_prompt:</span><br>
         <span class="prompt-val">"You are a supervisor coordinating three specialist agents:</span><br>
-        <span class="prompt-val">&nbsp;&nbsp;- Mathematician: math and calculations</span><br>
+        <span class="prompt-val">&nbsp;&nbsp;- Mathematician: math, calculations, random numbers, UUIDs</span><br>
         <span class="prompt-val">&nbsp;&nbsp;- Wordsmith: text processing</span><br>
-        <span class="prompt-val">&nbsp;&nbsp;- Timekeeper: time, UUIDs, dates</span><br><br>
+        <span class="prompt-val">&nbsp;&nbsp;- Timekeeper: current time, date differences</span><br><br>
         <span class="prompt-val">Delegate to the appropriate specialist(s). If the request spans multiple specialties, call multiple specialists in parallel."</span>
       </div>
     </div>
@@ -908,7 +908,7 @@
         </div>
       </div>
       <div class="specialist-prompt">
-        "You are the Mathematician &mdash; a precise, methodical specialist. Show your work step by step. Only answer the math parts. Silently skip anything outside your specialty."
+        "You are the Mathematician &mdash; a precise, methodical specialist. Show your work step by step. You have tools for arithmetic, exponentiation, square roots, percentages, random number generation, and UUID generation. Only answer the math/number parts. Silently skip anything outside your specialty."
       </div>
       <div class="specialist-tools">
         <span class="tool-tag">add</span>
@@ -917,6 +917,8 @@
         <span class="tool-tag">sqrt</span>
         <span class="tool-tag">power</span>
         <span class="tool-tag">percentage</span>
+        <span class="tool-tag">random_number</span>
+        <span class="tool-tag">generate_uuid</span>
       </div>
     </div>
 
@@ -949,13 +951,11 @@
         </div>
       </div>
       <div class="specialist-prompt">
-        "You are the Timekeeper &mdash; a utility specialist. You handle time queries, UUID generation, date calculations, and random number generation. Be precise with formats."
+        "You are the Timekeeper &mdash; a temporal specialist. You handle time queries and date calculations. Be precise with formats."
       </div>
       <div class="specialist-tools">
         <span class="tool-tag">now</span>
-        <span class="tool-tag">generate_uuid</span>
         <span class="tool-tag">date_diff</span>
-        <span class="tool-tag">random_number</span>
       </div>
     </div>
 
@@ -1025,8 +1025,8 @@
     <div class="output-example">
       <span style="color:#ec4899;">[Mathematician]</span> 2^10 = 1024<br>
       <span style="color:#06b6d4;">[Wordsmith]</span> "langgraph" reversed is "hparggnal"<br>
-      <span style="color:#10b981;">[Timekeeper]</span> Current time: 2026-02-27 22:10:08 UTC<br><br>
-      <span style="color:#6366f1;">Supervisor synthesized these into one coherent answer.</span>
+      <span style="color:#10b981;">[Timekeeper]</span> Current time: 2026-02-27T23:18:03.935869<br><br>
+      <span style="color:#6366f1;">2 to the power of 10 is 1024. The reverse of 'langgraph' is 'hparggnal'. The current time is 2026-02-27T23:18:03.935869.</span>
     </div>
   </div>
 
