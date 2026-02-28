@@ -50,7 +50,7 @@ load_dotenv()
 #    use any model OpenRouter supports.
 # ─────────────────────────────────────────────
 
-MODEL_NAME = "google/gemini-2.0-flash-001"
+MODEL_NAME = "google/gemini-2.5-flash"
 
 llm = ChatOpenAI(
     model=MODEL_NAME,

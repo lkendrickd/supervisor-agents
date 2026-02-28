@@ -60,6 +60,8 @@ uv run python supervisor.py
 
 ## Notes
 
+Keep in mind that the performance and correct tool calling depend heavily on the LLM knowledge, reasoning, and tool use capabilities.
+
 - LLM calls go through [OpenRouter](https://openrouter.ai). Change `MODEL_NAME` in `supervisor.py` to swap models.
 - The supervisor only sees final answers from specialists, not intermediate reasoning. If it misreads a result, you can change the `@tool` wrappers to return steps alongside the answer.
 - Tools are served via MCP over stdio. The client spawns `server.py` as a subprocess on startup, loads all tools, then `filter_tools()` splits them across specialists.
