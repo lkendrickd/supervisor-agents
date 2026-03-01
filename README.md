@@ -27,6 +27,8 @@ Open `blueprint.html` in a browser. It walks through the supervisor pattern and 
 
 ## Prerequisites
 
+I chose openrouter for the LLM provider to show how to swap models and providers easily. You can switch to any OpenAI-compatible API by changing the `model` argument in `create_agent()`.
+
 - Python 3.13+
 - [uv](https://docs.astral.sh/uv/)
 - [OpenRouter](https://openrouter.ai) API key
@@ -36,8 +38,15 @@ Open `blueprint.html` in a browser. It walks through the supervisor pattern and 
 ```bash
 uv sync
 cp .env.example .env
-# edit .env with your key from https://openrouter.ai
 ```
+
+Edit `.env` with your values:
+
+| Variable | Required | Default | Description |
+|---|---|---|---|
+| `OPENROUTER_API_KEY` | yes | — | API key from [OpenRouter](https://openrouter.ai) |
+| `SUPERVISOR_MODEL` | no | `google/gemini-2.5-flash` | Model for the supervisor (routing and synthesis) |
+| `SPECIALIST_MODEL` | no | same as `SUPERVISOR_MODEL` | Model for the three specialist agents. Set to a cheaper model to save costs. |
 
 ## Running
 
@@ -62,7 +71,7 @@ uv run python supervisor.py
 
 Keep in mind that the performance and correct tool calling depend heavily on the LLM knowledge, reasoning, and tool use capabilities.
 
-- LLM calls go through [OpenRouter](https://openrouter.ai). Change `MODEL_NAME` in `supervisor.py` to swap models.
+- LLM calls go through [OpenRouter](https://openrouter.ai). Set `SUPERVISOR_MODEL` and `SPECIALIST_MODEL` in `.env` to swap models.
 - The supervisor only sees final answers from specialists, not intermediate reasoning. If it misreads a result, you can change the `@tool` wrappers to return steps alongside the answer.
 - Tools are served via MCP over stdio. The client spawns `server.py` as a subprocess on startup, loads all tools, then `filter_tools()` splits them across specialists.
 - In a real deployment you'd run the MCP server as a standalone service over Streamable HTTP instead of spawning it inline. The subprocess approach here keeps the demo to one `uv run` command.
