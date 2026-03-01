@@ -1,10 +1,10 @@
 # Supervisor-Agents
 
-A multi-agent system built with LangGraph. One supervisor agent decides which of three specialists to call and stitches their answers together. Each specialist gets its own subset of tools from an MCP server. If two tasks are independent the supervisor calls both at once; if one needs the other's output it chains them.
+A multi-agent system built with LangGraph. One supervisor agent decides which of four specialists to call and stitches their answers together. Each specialist gets its own subset of tools from an MCP server. If two tasks are independent the supervisor calls both at once; if one needs the other's output it chains them. File write operations go through a human-in-the-loop approval step.
 
 ## How it works
 
-The supervisor is a ReAct agent. Its only "tools" are the three specialists, wrapped as `@tool` functions with string-in/string-out interfaces. It never sees their internals, just the docstrings. When the LLM emits multiple tool calls in one response, LangGraph runs them concurrently.
+The supervisor is a ReAct agent. Its only "tools" are the four specialists, wrapped as `@tool` functions with string-in/string-out interfaces. It never sees their internals, just the docstrings. When the LLM emits multiple tool calls in one response, LangGraph runs them concurrently.
 
 ### Specialists
 
@@ -13,6 +13,57 @@ The supervisor is a ReAct agent. Its only "tools" are the three specialists, wra
 | Mathematician | add, multiply, divide, sqrt, power, percentage, random_number, generate_uuid | Arithmetic, exponentiation, percentages, random numbers, UUIDs |
 | Wordsmith | word_count, char_count, to_uppercase, to_lowercase, reverse_text | Text processing, string manipulation |
 | Timekeeper | now, date_diff | Time queries, date calculations |
+| Scribe (read) | read_file, list_files | Read file contents, list directory entries — auto-approved |
+| Scribe (write) | create_file, delete_file | Create/overwrite files, delete files — requires human approval |
+
+### Human-in-the-loop (HITL)
+
+The Scribe specialist is exposed to the supervisor as two separate tools, giving the middleware precise control over which operations require approval:
+
+| Supervisor tool | Scribe tools used | Approval |
+|---|---|---|
+| `ask_scribe_read` | `read_file`, `list_files` | Auto-approved |
+| `ask_scribe_write` | `create_file`, `delete_file` | Requires human approval |
+
+When the supervisor calls `ask_scribe_write`, LangChain's `HumanInTheLoopMiddleware` fires an `interrupt()` before the tool executes. The CLI catches this and prompts you to:
+
+- **Approve** (`a`) — execute the operation as-is
+- **Reject** (`r`) — cancel with an optional reason
+- **Edit** (`e`) — modify the tool arguments (as JSON) before executing
+
+This uses LangGraph's `interrupt()` / `Command(resume=...)` mechanism backed by a `MemorySaver` checkpointer.
+
+#### Example: creating a file (approved)
+```
+You: Create a file called notes.txt with 'hello world'
+  delegating to: ask_scribe_write({'request': "create a file named 'notes.txt' ..."})
+╭── Approval Required ─────────────────────────╮
+│ Tool:  ask_scribe_write                       │
+│ Args:  {'request': "create a file named ..."}│
+╰───────────────────────────────────────────────╯
+Approve, reject, or edit? (a/r/e): a
+  Approved
+  result: Created notes.txt
+╭── Supervisor ─────────────────────────────────╮
+│ Done! The file notes.txt has been created.    │
+╰───────────────────────────────────────────────╯
+```
+
+#### Example: deleting a file (rejected)
+```
+You: Delete notes.txt
+  delegating to: ask_scribe_write({'request': "delete the file notes.txt"})
+╭── Approval Required ─────────────────────────╮
+│ Tool:  ask_scribe_write                       │
+│ Args:  {'request': "delete the file ..."}    │
+╰───────────────────────────────────────────────╯
+Approve, reject, or edit? (a/r/e): r
+Reason (optional): I changed my mind
+  Rejected
+╭── Supervisor ─────────────────────────────────╮
+│ The deletion was not carried out.             │
+╰───────────────────────────────────────────────╯
+```
 
 ### Parallel vs sequential
 
@@ -20,6 +71,8 @@ The supervisor's ReAct loop handles both. No extra routing logic:
 
 - "Calculate 2^10 and reverse 'hello'" calls Mathematician and Wordsmith in parallel (two tool calls in one LLM response).
 - "Count the words in 'Foo Bar Baz' and multiply that count by 3" calls Wordsmith first, reads the result (3), then passes it to Mathematician (3 x 3 = 9). The chaining happens on its own.
+- "Count the words in README.md" calls Scribe (read) first, then Wordsmith with the file contents.
+- "Create a file with today's date as the filename" calls Timekeeper first, then Scribe (write, with approval prompt).
 
 ### Architecture diagram
 
@@ -46,7 +99,7 @@ Edit `.env` with your values:
 |---|---|---|---|
 | `OPENROUTER_API_KEY` | yes | — | API key from [OpenRouter](https://openrouter.ai) |
 | `SUPERVISOR_MODEL` | no | `google/gemini-2.5-flash` | Model for the supervisor (routing and synthesis) |
-| `SPECIALIST_MODEL` | no | same as `SUPERVISOR_MODEL` | Model for the three specialist agents. Set to a cheaper model to save costs. |
+| `SPECIALIST_MODEL` | no | same as `SUPERVISOR_MODEL` | Model for the specialist agents. Set to a cheaper model to save costs. |
 
 ## Running
 
@@ -75,3 +128,4 @@ Keep in mind that the performance and correct tool calling depend heavily on the
 - The supervisor only sees final answers from specialists, not intermediate reasoning. If it misreads a result, you can change the `@tool` wrappers to return steps alongside the answer.
 - Tools are served via MCP over stdio. The client spawns `mcp_tools.py` as a subprocess on startup, loads all tools, then `filter_tools()` splits them across specialists.
 - In a real deployment you'd run the MCP server as a standalone service over Streamable HTTP instead of spawning it inline. The subprocess approach here keeps the demo to one `uv run` command.
+- **File tool sandboxing** — all file paths are resolved relative to the project root (`PROJECT_DIR`). Path traversal attempts (e.g. `../../etc/passwd`) are rejected by `_safe_path()`. Override the root via the `MCP_PROJECT_DIR` environment variable (used by tests to isolate to a temp directory).

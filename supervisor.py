@@ -16,6 +16,13 @@ SPECIALIST AGENTS:
   - Mathematician — math/number tools (add, multiply, sqrt, divide, power, percentage, random_number, generate_uuid)
   - Wordsmith     — text tools (word_count, char_count, to_uppercase, to_lowercase, reverse_text)
   - Timekeeper    — temporal tools (now, date_diff)
+  - Scribe        — file tools (read_file, list_files, create_file, delete_file)
+
+HUMAN-IN-THE-LOOP:
+  File write operations (create_file, delete_file) require human approval.
+  The supervisor uses HumanInTheLoopMiddleware to interrupt before executing
+  write tools. The CLI prompts the user to approve, reject, or edit the
+  operation before resuming.
 
 Run:
   uv run python supervisor.py
@@ -23,6 +30,7 @@ Run:
 
 import os
 import asyncio
+import uuid as uuid_mod
 from typing import Any
 
 from dotenv import load_dotenv
@@ -36,33 +44,15 @@ from langchain.tools import tool
 # `name` for labeling the agent in multi-agent setups.
 from langchain.agents import create_agent
 
+from langgraph.checkpoint.memory import MemorySaver
+from langgraph.types import Command
+from langchain.agents.middleware.human_in_the_loop import HumanInTheLoopMiddleware
+
 from rich.console import Console
 from rich.panel import Panel
 from rich.markdown import Markdown
 
 load_dotenv(override=True)
-
-
-# ─────────────────────────────────────────────
-# 1. MODEL CONFIG
-#    Uses OpenRouter as the LLM provider via the
-#    OpenAI-compatible API. SUPERVISOR_MODEL runs
-#    the orchestrator, SPECIALIST_MODEL runs the
-#    agents. Set SPECIALIST_MODEL to a cheaper
-#    model to save costs on tool-calling tasks.
-# ─────────────────────────────────────────────
-
-SUPERVISOR_MODEL = os.environ.get("SUPERVISOR_MODEL", "google/gemini-2.5-flash")
-SPECIALIST_MODEL = os.environ.get("SPECIALIST_MODEL", SUPERVISOR_MODEL)
-
-_openrouter_kwargs = {
-    "max_completion_tokens": 1024,
-    "base_url": "https://openrouter.ai/api/v1",
-    "api_key": SecretStr(os.environ["OPENROUTER_API_KEY"]),
-}
-
-supervisor_llm = ChatOpenAI(model=SUPERVISOR_MODEL, **_openrouter_kwargs)
-specialist_llm = ChatOpenAI(model=SPECIALIST_MODEL, **_openrouter_kwargs)
 
 
 # ─────────────────────────────────────────────
@@ -89,7 +79,7 @@ MCP_SERVERS: dict[str, dict[str, Any]] = {
 # ─────────────────────────────────────────────
 
 # Which tools belong to which specialist.
-MATH_TOOL_NAMES = {
+MATH_TOOL_NAMES: set[str] = {
     "add",
     "multiply",
     "sqrt",
@@ -99,14 +89,16 @@ MATH_TOOL_NAMES = {
     "random_number",
     "generate_uuid",
 }
-TEXT_TOOL_NAMES = {
+TEXT_TOOL_NAMES: set[str] = {
     "word_count",
     "char_count",
     "to_uppercase",
     "to_lowercase",
     "reverse_text",
 }
-UTILITY_TOOL_NAMES = {"now", "date_diff"}
+UTILITY_TOOL_NAMES: set[str] = {"now", "date_diff"}
+FILE_READ_TOOL_NAMES: set[str] = {"read_file", "list_files"}
+FILE_WRITE_TOOL_NAMES: set[str] = {"create_file", "delete_file"}
 
 
 def filter_tools(all_tools: list, names: set[str]) -> list:
@@ -122,17 +114,20 @@ def filter_tools(all_tools: list, names: set[str]) -> list:
 # ─────────────────────────────────────────────
 
 
-def create_specialists(all_tools: list) -> dict:
-    """Build the three specialist agents from the full MCP tool list.
+def create_specialists(all_tools: list, llm: ChatOpenAI) -> dict:
+    """Build the specialist agents from the full MCP tool list.
 
     Returns a dict mapping persona name → compiled agent.
     """
-    math_tools = filter_tools(all_tools, MATH_TOOL_NAMES)
-    text_tools = filter_tools(all_tools, TEXT_TOOL_NAMES)
-    utility_tools = filter_tools(all_tools, UTILITY_TOOL_NAMES)
+    math_tools: list = filter_tools(all_tools, MATH_TOOL_NAMES)
+    text_tools: list = filter_tools(all_tools, TEXT_TOOL_NAMES)
+    utility_tools: list = filter_tools(all_tools, UTILITY_TOOL_NAMES)
+    file_tools: list = filter_tools(
+        all_tools, FILE_READ_TOOL_NAMES | FILE_WRITE_TOOL_NAMES
+    )
 
     mathematician = create_agent(
-        model=specialist_llm,
+        model=llm,
         tools=math_tools,
         system_prompt="You are the Mathematician — a precise, methodical specialist. "
         "Show your work step by step. You have tools for arithmetic, "
@@ -145,7 +140,7 @@ def create_specialists(all_tools: list) -> dict:
     )
 
     wordsmith = create_agent(
-        model=specialist_llm,
+        model=llm,
         tools=text_tools,
         system_prompt="You are the Wordsmith — a text processing specialist. "
         "You handle word counts, character counts, case conversion, "
@@ -157,7 +152,7 @@ def create_specialists(all_tools: list) -> dict:
     )
 
     timekeeper = create_agent(
-        model=specialist_llm,
+        model=llm,
         tools=utility_tools,
         system_prompt="You are the Timekeeper — a temporal specialist. "
         "You handle time queries and date calculations. Be precise with formats. "
@@ -167,10 +162,28 @@ def create_specialists(all_tools: list) -> dict:
         name="Timekeeper",
     )
 
+    scribe = create_agent(
+        model=llm,
+        tools=file_tools,
+        system_prompt="You are the Scribe — a file operations specialist. "
+        "You handle reading files, listing directory contents, creating files, "
+        "and deleting files. All paths are relative to the project root. "
+        "CRITICAL: When a tool returns file contents, return the COMPLETE, "
+        "UNMODIFIED output exactly as received. Never summarize, truncate, "
+        "paraphrase, or interpret file contents. Never claim a file is empty "
+        "if the tool returned content. Your job is to relay the raw tool "
+        "output faithfully. "
+        "IMPORTANT: Only answer the file-related parts of a question. "
+        "Silently skip anything outside your specialty — "
+        "never say 'I cannot' or mention missing capabilities.",
+        name="Scribe",
+    )
+
     return {
         "Mathematician": mathematician,
         "Wordsmith": wordsmith,
         "Timekeeper": timekeeper,
+        "Scribe": scribe,
     }
 
 
@@ -191,12 +204,15 @@ def create_specialists(all_tools: list) -> dict:
 # ─────────────────────────────────────────────
 
 
-def create_supervisor(specialists: dict):
+def create_supervisor(specialists: dict, llm: ChatOpenAI, checkpointer=None):
     """Build a supervisor agent that delegates to specialists.
 
     Each specialist is wrapped as a LangChain @tool so the supervisor
     can call it like any other tool. The supervisor's LLM decides
     which specialist(s) to invoke based on the user's request.
+
+    If *checkpointer* is provided, enables human-in-the-loop approval
+    for file-write operations via HumanInTheLoopMiddleware.
     """
 
     # We need to capture the agent references in closures.
@@ -205,6 +221,7 @@ def create_supervisor(specialists: dict):
     mathematician_agent = specialists["Mathematician"]
     wordsmith_agent = specialists["Wordsmith"]
     timekeeper_agent = specialists["Timekeeper"]
+    scribe_agent = specialists["Scribe"]
 
     @tool
     async def ask_mathematician(request: str) -> str:
@@ -236,14 +253,54 @@ def create_supervisor(specialists: dict):
         )
         return result["messages"][-1].content
 
+    @tool
+    async def ask_scribe_read(request: str) -> str:
+        """Delegate a file reading question to the Scribe specialist.
+        Use for reading file contents and listing directory entries.
+        Never use for creating or deleting files.
+        """
+        result = await scribe_agent.ainvoke(
+            {"messages": [{"role": "user", "content": request}]}
+        )
+        return result["messages"][-1].content
+
+    @tool
+    async def ask_scribe_write(request: str) -> str:
+        """Delegate a file write or delete operation to the Scribe specialist.
+        Use for creating new files or deleting existing files.
+        Requires human approval.
+        """
+        result = await scribe_agent.ainvoke(
+            {"messages": [{"role": "user", "content": request}]}
+        )
+        return result["messages"][-1].content
+
+    hitl = HumanInTheLoopMiddleware(interrupt_on={"ask_scribe_write": True})
+
     supervisor = create_agent(
-        model=supervisor_llm,
-        tools=[ask_mathematician, ask_wordsmith, ask_timekeeper],
-        system_prompt="You are a supervisor coordinating three specialist agents:\n"
+        model=llm,
+        tools=[
+            ask_mathematician,
+            ask_wordsmith,
+            ask_timekeeper,
+            ask_scribe_read,
+            ask_scribe_write,
+        ],
+        middleware=[hitl],
+        checkpointer=checkpointer,
+        system_prompt="You are a supervisor coordinating four specialist agents:\n"
         "  - Mathematician: math, calculations, random numbers, UUIDs\n"
         "  - Wordsmith: text processing (counts, case, reversal)\n"
-        "  - Timekeeper: current time, date differences\n\n"
-        "For each user request, delegate to the appropriate specialist(s).\n\n"
+        "  - Timekeeper: current time, date differences\n"
+        "  - Scribe (read): reading files, listing directories\n"
+        "  - Scribe (write): creating/deleting files\n\n"
+        "For each user request, delegate to the appropriate specialist(s).\n"
+        "Use ask_scribe_read for reading/listing files.\n"
+        "Use ask_scribe_write for creating/deleting files.\n\n"
+        "NEVER ask the user for confirmation before calling a tool. "
+        "Just call the tool directly — the system handles approval "
+        "automatically for write operations. Do not say things like "
+        "'please approve' or 'shall I proceed'. Act immediately.\n\n"
         "IMPORTANT — before calling specialists, check for dependencies:\n"
         "  - If one specialist's INPUT requires another specialist's OUTPUT, "
         "call them sequentially. Wait for the first result, then pass it "
@@ -264,19 +321,124 @@ def create_supervisor(specialists: dict):
 #    Chat loop with conversation memory. The
 #    supervisor streams its responses, showing
 #    delegation steps as they happen.
+#    Uses a checkpointer for history and supports
+#    human-in-the-loop interrupts for file writes.
 # ─────────────────────────────────────────────
 
 
-async def cli(supervisor) -> None:
+async def handle_interrupt(interrupts, console) -> Command:
+    """Prompt the user to approve/reject each interrupted tool call.
+
+    Returns a ``Command(resume=...)`` with an ``HITLResponse`` payload.
+    """
+    import json
+    from langchain.agents.middleware.human_in_the_loop import (
+        ApproveDecision,
+        EditDecision,
+        RejectDecision,
+        HITLResponse,
+        Decision,
+    )
+
+    decisions: list[Decision] = []
+
+    for intr in interrupts:
+        hitl_request = intr.value
+        for action in hitl_request["action_requests"]:
+            console.print(
+                Panel(
+                    f"[bold]Tool:[/bold]  {action['name']}\n"
+                    f"[bold]Args:[/bold]  {action['args']}",
+                    title="Approval Required",
+                    border_style="yellow",
+                )
+            )
+
+            while True:
+                choice = (
+                    console.input(
+                        "[bold yellow]Approve, reject, or edit? (a/r/e):[/bold yellow] "
+                    )
+                    .strip()
+                    .lower()
+                )
+
+                if choice in ("a", "approve"):
+                    decisions.append(ApproveDecision(type="approve"))
+                    console.print("  [green]Approved[/green]")
+                    break
+                elif choice in ("r", "reject"):
+                    reason = console.input("[dim]Reason (optional):[/dim] ").strip()
+                    decision = RejectDecision(type="reject")
+                    if reason:
+                        decision["message"] = reason
+                    decisions.append(decision)
+                    console.print("  [red]Rejected[/red]")
+                    break
+                elif choice in ("e", "edit"):
+                    new_args_str = console.input(
+                        "[dim]New args as JSON (e.g. "
+                        '{"path": "x.txt", "content": "hi"}):[/dim] '
+                    ).strip()
+                    try:
+                        new_args = json.loads(new_args_str)
+                    except json.JSONDecodeError:
+                        console.print("  [red]Invalid JSON, try again[/red]")
+                        continue
+                    decisions.append(
+                        EditDecision(
+                            type="edit",
+                            edited_action={
+                                "name": action["name"],
+                                "args": new_args,
+                            },
+                        )
+                    )
+                    console.print("  [blue]Edited[/blue]")
+                    break
+                else:
+                    console.print("  [dim]Please enter a, r, or e[/dim]")
+
+    response: HITLResponse = {"decisions": decisions}
+    return Command(resume=response)
+
+
+async def _stream_and_trace(supervisor, input_val, config, console):
+    """Stream the supervisor, printing delegation/result traces.
+
+    Returns the last message from the stream (or None).
+    """
+    last_msg = None
+    async for chunk in supervisor.astream(
+        input_val,
+        config,
+        stream_mode="values",
+    ):
+        last_msg = chunk["messages"][-1]
+
+        if hasattr(last_msg, "tool_calls") and last_msg.tool_calls:
+            for tc in last_msg.tool_calls:
+                console.print(
+                    f"  [dim italic]delegating to: {tc['name']}({tc['args']})[/dim italic]"
+                )
+        elif last_msg.type == "tool":
+            content = last_msg.content
+            preview = content[:200] + "..." if len(content) > 200 else content
+            console.print(f"  [dim italic]result: {preview}[/dim italic]")
+
+    return last_msg
+
+
+async def cli(supervisor, supervisor_model: str, specialist_model: str) -> None:
     """Interactive chat loop with conversation memory and delegation tracing."""
     console = Console()
 
     console.print(
         Panel(
-            f"Supervisor: [bold]{SUPERVISOR_MODEL}[/bold]\n"
-            f"Specialists: [bold]{SPECIALIST_MODEL}[/bold]\n"
+            f"Supervisor: [bold]{supervisor_model}[/bold]\n"
+            f"Specialists: [bold]{specialist_model}[/bold]\n"
             f"Pattern: [bold]supervisor[/bold] (agents-as-tools)\n"
-            f"Specialists: Mathematician, Wordsmith, Timekeeper\n"
+            f"Specialists: Mathematician, Wordsmith, Timekeeper, Scribe\n"
             "Type [bold]exit[/bold] or [bold]quit[/bold] to leave.\n\n"
             "[bold]Parallel[/bold] (independent tasks, agents run concurrently):\n"
             "  \"Calculate 2^10 and count the words in 'hello world'\"  → Mathematician + Wordsmith\n"
@@ -284,13 +446,23 @@ async def cli(supervisor) -> None:
             "  \"Multiply 7 by 8, uppercase 'hello', and get the time\" → Mathematician + Wordsmith + Timekeeper\n\n"
             "[bold]Chained[/bold] (result from one agent feeds into another):\n"
             "  \"Count the words in 'Foo Bar Baz' and multiply that count by 3\" → Wordsmith then Mathematician\n"
-            '  "Get the current time and count the characters in it"            → Timekeeper then Wordsmith',
+            '  "Get the current time and count the characters in it"            → Timekeeper then Wordsmith\n\n'
+            "[bold]File read[/bold] (auto-approved):\n"
+            '  "List the files in the project directory"                        → Scribe\n'
+            '  "Read the contents of README.md"                                 → Scribe\n\n'
+            "[bold]File write[/bold] (requires approval):\n"
+            "  \"Create a file called notes.txt with 'hello world'\"             → Scribe (approval required)\n"
+            '  "Delete the file notes.txt"                                      → Scribe (approval required)\n\n'
+            "[bold]Cross-specialist[/bold]:\n"
+            '  "Count the words in README.md"                                   → Scribe then Wordsmith\n'
+            '  "Create a file with today\'s date as the filename"               → Timekeeper then Scribe (approval required)',
             title="Supervisor Agent",
             border_style="blue",
         )
     )
 
-    messages: list[dict] = []
+    thread_id = str(uuid_mod.uuid4())
+    config: dict[str, Any] = {"configurable": {"thread_id": thread_id}}
 
     while True:
         try:
@@ -306,28 +478,25 @@ async def cli(supervisor) -> None:
         if not user_input.strip():
             continue
 
-        messages.append({"role": "user", "content": user_input})
+        # First invocation with user message
+        last_msg = await _stream_and_trace(
+            supervisor,
+            {"messages": [{"role": "user", "content": user_input}]},
+            config,
+            console,
+        )
 
-        last_msg = None
-        async for chunk in supervisor.astream(
-            {"messages": messages},  # type: ignore[arg-type]
-            stream_mode="values",
-        ):
-            last_msg = chunk["messages"][-1]
+        # Check for interrupts and resume until none remain
+        while True:
+            state = await supervisor.aget_state(config)
+            if not state.interrupts:
+                break
 
-            if hasattr(last_msg, "tool_calls") and last_msg.tool_calls:
-                for tc in last_msg.tool_calls:
-                    console.print(
-                        f"  [dim italic]delegating to: {tc['name']}({tc['args']})[/dim italic]"
-                    )
-            elif last_msg.type == "tool":
-                content = last_msg.content
-                preview = content[:200] + "..." if len(content) > 200 else content
-                console.print(f"  [dim italic]result: {preview}[/dim italic]")
+            command = await handle_interrupt(state.interrupts, console)
+            last_msg = await _stream_and_trace(supervisor, command, config, console)
 
         if last_msg:
             answer = last_msg.content or "(no response)"
-            messages.append({"role": "assistant", "content": answer})
             console.print(
                 Panel(
                     Markdown(answer),
@@ -340,16 +509,35 @@ async def cli(supervisor) -> None:
 async def main():
     console = Console()
 
+    # ── Model config ──────────────────────────────────
+    api_key = os.environ.get("OPENROUTER_API_KEY")
+    if not api_key:
+        raise SystemExit("Set OPENROUTER_API_KEY in .env (see .env.example)")
+
+    supervisor_model = os.environ.get("SUPERVISOR_MODEL", "google/gemini-2.5-flash")
+    specialist_model = os.environ.get("SPECIALIST_MODEL", supervisor_model)
+
+    openrouter_kwargs: dict[str, Any] = {
+        "max_completion_tokens": 2048,
+        "base_url": "https://openrouter.ai/api/v1",
+        "api_key": SecretStr(api_key),
+    }
+
+    supervisor_llm = ChatOpenAI(model=supervisor_model, **openrouter_kwargs)
+    specialist_llm = ChatOpenAI(model=specialist_model, **openrouter_kwargs)
+
+    # ── Load tools & build agents ─────────────────────
     console.print("[dim]Loading tools from MCP server...[/dim]")
     client = MultiServerMCPClient(MCP_SERVERS)  # type: ignore[arg-type]
     all_tools = await client.get_tools()
     tool_names = [t.name for t in all_tools]
     console.print(f"[dim]Loaded {len(all_tools)} tools: {tool_names}[/dim]")
 
-    specialists = create_specialists(all_tools)
-    supervisor = create_supervisor(specialists)
+    checkpointer = MemorySaver()
+    specialists = create_specialists(all_tools, specialist_llm)
+    supervisor = create_supervisor(specialists, supervisor_llm, checkpointer)
 
-    await cli(supervisor)
+    await cli(supervisor, supervisor_model, specialist_model)
 
 
 if __name__ == "__main__":

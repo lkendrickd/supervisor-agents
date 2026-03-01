@@ -5,6 +5,7 @@ so we can call them directly.
 """
 
 import datetime
+import os
 import uuid
 
 import pytest
@@ -25,6 +26,11 @@ from mcp_tools import (
     generate_uuid,
     date_diff,
     random_number,
+    read_file,
+    list_files,
+    create_file,
+    delete_file,
+    _safe_path,
 )
 
 
@@ -181,7 +187,7 @@ class TestNow:
     def test_is_recent(self):
         result = now()
         parsed = datetime.datetime.fromisoformat(result)
-        delta = abs(datetime.datetime.now() - parsed)
+        delta = abs(datetime.datetime.now(datetime.timezone.utc) - parsed)
         assert delta.total_seconds() < 2
 
 
@@ -225,3 +231,86 @@ class TestRandomNumber:
 
     def test_single_value_range(self):
         assert random_number(5, 5) == 5
+
+
+# ── File tools ──
+
+
+@pytest.fixture(autouse=True)
+def _use_tmp_project_dir(tmp_path, monkeypatch):
+    """Point PROJECT_DIR at a tmp directory for every file-tool test."""
+    import mcp_tools
+
+    monkeypatch.setattr(mcp_tools, "PROJECT_DIR", str(tmp_path))
+
+
+class TestSafePath:
+    def test_relative_path(self, tmp_path):
+        result = _safe_path("foo.txt")
+        assert result == os.path.join(str(tmp_path), "foo.txt")
+
+    def test_rejects_traversal(self):
+        with pytest.raises(ValueError, match="escapes the project directory"):
+            _safe_path("../../etc/passwd")
+
+    def test_rejects_absolute_outside(self):
+        with pytest.raises(ValueError, match="escapes the project directory"):
+            _safe_path("/etc/passwd")
+
+
+class TestReadFile:
+    def test_reads_content(self, tmp_path):
+        f = tmp_path / "hello.txt"
+        f.write_text("hello world")
+        assert read_file("hello.txt") == "hello world"
+
+    def test_missing_file(self):
+        result = read_file("nonexistent.txt")
+        assert result.startswith("Error:")
+
+
+class TestListFiles:
+    def test_lists_entries(self, tmp_path):
+        (tmp_path / "a.txt").touch()
+        (tmp_path / "b.txt").touch()
+        result = list_files(".")
+        assert "a.txt" in result
+        assert "b.txt" in result
+
+    def test_empty_dir(self, tmp_path):
+        sub = tmp_path / "empty"
+        sub.mkdir()
+        assert list_files("empty") == ""
+
+    def test_missing_dir(self):
+        result = list_files("no_such_dir")
+        assert result.startswith("Error:")
+
+
+class TestCreateFile:
+    def test_creates_file(self, tmp_path):
+        result = create_file("new.txt", "content")
+        assert result == "Created new.txt"
+        assert (tmp_path / "new.txt").read_text() == "content"
+
+    def test_creates_nested(self, tmp_path):
+        create_file("sub/dir/deep.txt", "deep")
+        assert (tmp_path / "sub" / "dir" / "deep.txt").read_text() == "deep"
+
+    def test_overwrites(self, tmp_path):
+        (tmp_path / "exist.txt").write_text("old")
+        create_file("exist.txt", "new")
+        assert (tmp_path / "exist.txt").read_text() == "new"
+
+
+class TestDeleteFile:
+    def test_deletes_file(self, tmp_path):
+        f = tmp_path / "doomed.txt"
+        f.write_text("bye")
+        result = delete_file("doomed.txt")
+        assert result == "Deleted doomed.txt"
+        assert not f.exists()
+
+    def test_missing_file(self):
+        result = delete_file("ghost.txt")
+        assert result.startswith("Error:")

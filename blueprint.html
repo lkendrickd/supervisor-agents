@@ -328,8 +328,8 @@
     content: '';
     position: absolute;
     top: 0;
-    left: calc(16.66%);
-    right: calc(16.66%);
+    left: calc(12.5%);
+    right: calc(12.5%);
     height: 2px;
     background: rgba(99,102,241,0.15);
   }
@@ -349,7 +349,7 @@
   /* ── Specialists grid ── */
   .specialists-grid {
     display: grid;
-    grid-template-columns: repeat(3, 1fr);
+    grid-template-columns: repeat(4, 1fr);
     gap: 16px;
     margin-bottom: 20px;
   }
@@ -375,6 +375,7 @@
   .specialist-card.math::before { background: linear-gradient(90deg, transparent, #ec4899, transparent); }
   .specialist-card.text::before { background: linear-gradient(90deg, transparent, #06b6d4, transparent); }
   .specialist-card.util::before { background: linear-gradient(90deg, transparent, #10b981, transparent); }
+  .specialist-card.file::before { background: linear-gradient(90deg, transparent, #f59e0b, transparent); }
 
   .specialist-header {
     display: flex;
@@ -397,6 +398,7 @@
   .math .specialist-icon { background: rgba(236,72,153,0.1); border: 1px solid rgba(236,72,153,0.2); }
   .text .specialist-icon { background: rgba(6,182,212,0.1); border: 1px solid rgba(6,182,212,0.2); }
   .util .specialist-icon { background: rgba(16,185,129,0.1); border: 1px solid rgba(16,185,129,0.2); }
+  .file .specialist-icon { background: rgba(245,158,11,0.1); border: 1px solid rgba(245,158,11,0.2); }
 
   .specialist-name {
     font-size: 14px;
@@ -440,6 +442,48 @@
   .math .tool-tag { border-color: rgba(236,72,153,0.15); color: rgba(236,72,153,0.7); }
   .text .tool-tag { border-color: rgba(6,182,212,0.15); color: rgba(6,182,212,0.7); }
   .util .tool-tag { border-color: rgba(16,185,129,0.15); color: rgba(16,185,129,0.7); }
+  .file .tool-tag { border-color: rgba(245,158,11,0.15); color: rgba(245,158,11,0.7); }
+  .file .tool-tag.write-tier { border-color: rgba(239,68,68,0.2); color: rgba(239,68,68,0.7); }
+
+  /* ── HITL styles ── */
+  .hitl-badge {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 9px;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    padding: 2px 8px;
+    border-radius: 3px;
+    display: inline-block;
+    margin-left: 6px;
+  }
+
+  .hitl-badge.auto {
+    background: rgba(16,185,129,0.1);
+    border: 1px solid rgba(16,185,129,0.2);
+    color: #10b981;
+  }
+
+  .hitl-badge.approval {
+    background: rgba(239,68,68,0.1);
+    border: 1px solid rgba(239,68,68,0.2);
+    color: #ef4444;
+  }
+
+  .timeline-step.file-step .timeline-dot {
+    background: rgba(245,158,11,0.3);
+    border-color: #f59e0b;
+    box-shadow: 0 0 8px rgba(245,158,11,0.3);
+  }
+
+  .file-step .timeline-agent { color: #f59e0b; }
+
+  .timeline-step.hitl-step .timeline-dot {
+    background: rgba(239,68,68,0.3);
+    border-color: #ef4444;
+    box-shadow: 0 0 8px rgba(239,68,68,0.3);
+  }
+
+  .hitl-step .timeline-agent { color: #ef4444; }
 
   /* ── MCP layer ── */
   .mcp-block {
@@ -775,7 +819,7 @@
 
   .legend-grid {
     display: grid;
-    grid-template-columns: repeat(3, 1fr);
+    grid-template-columns: repeat(4, 1fr);
     gap: 20px;
     margin-top: 12px;
   }
@@ -814,6 +858,11 @@
     .step-arrow { transform: rotate(90deg); justify-content: center; }
     .legend-grid { grid-template-columns: 1fr; }
     .fanout-lines { display: none; }
+  }
+
+  @media (max-width: 1024px) and (min-width: 769px) {
+    .specialists-grid { grid-template-columns: repeat(2, 1fr); }
+    .legend-grid { grid-template-columns: repeat(2, 1fr); }
   }
 </style>
 </head>
@@ -857,11 +906,13 @@
       </div>
       <div class="glass-inner prompt-box">
         <span class="prompt-key">system_prompt:</span><br>
-        <span class="prompt-val">"You are a supervisor coordinating three specialist agents:</span><br>
+        <span class="prompt-val">"You are a supervisor coordinating four specialist agents:</span><br>
         <span class="prompt-val">&nbsp;&nbsp;- Mathematician: math, calculations, random numbers, UUIDs</span><br>
         <span class="prompt-val">&nbsp;&nbsp;- Wordsmith: text processing</span><br>
-        <span class="prompt-val">&nbsp;&nbsp;- Timekeeper: current time, date differences</span><br><br>
-        <span class="prompt-val">Delegate to the appropriate specialist(s). If the request spans multiple specialties, call multiple specialists in parallel."</span>
+        <span class="prompt-val">&nbsp;&nbsp;- Timekeeper: current time, date differences</span><br>
+        <span class="prompt-val">&nbsp;&nbsp;- Scribe (read): reading files, listing directories</span><br>
+        <span class="prompt-val">&nbsp;&nbsp;- Scribe (write): creating/deleting files</span><br><br>
+        <span class="prompt-val">Delegate to the appropriate specialist(s). File writes are automatically gated by human approval."</span>
       </div>
     </div>
   </div>
@@ -890,6 +941,7 @@
 
   <div class="fanout-lines">
     <div class="fanout-lines-inner">
+      <div class="fanout-vert"><div class="flow-line"></div><div class="flow-arrow-head"></div></div>
       <div class="fanout-vert"><div class="flow-line"></div><div class="flow-arrow-head"></div></div>
       <div class="fanout-vert"><div class="flow-line"></div><div class="flow-arrow-head"></div></div>
       <div class="fanout-vert"><div class="flow-line"></div><div class="flow-arrow-head"></div></div>
@@ -959,6 +1011,25 @@
       </div>
     </div>
 
+    <div class="glass specialist-card file">
+      <div class="specialist-header">
+        <div class="specialist-icon">&#128196;</div>
+        <div>
+          <div class="specialist-name">Scribe</div>
+          <div class="specialist-subtitle">ask_scribe_read() / ask_scribe_write()</div>
+        </div>
+      </div>
+      <div class="specialist-prompt">
+        "You are the Scribe &mdash; a file operations specialist. You handle reading files, listing directory contents, creating files, and deleting files. All paths are relative to the project root."
+      </div>
+      <div class="specialist-tools">
+        <span class="tool-tag">read_file</span><span class="hitl-badge auto">auto</span>
+        <span class="tool-tag">list_files</span><span class="hitl-badge auto">auto</span>
+        <span class="tool-tag write-tier">create_file</span><span class="hitl-badge approval">approval</span>
+        <span class="tool-tag write-tier">delete_file</span><span class="hitl-badge approval">approval</span>
+      </div>
+    </div>
+
   </div>
 
   <!-- 5. MCP Tool Layer -->
@@ -977,7 +1048,7 @@
         <div class="mcp-node server">Specialists</div>
       </div>
       <div class="mcp-desc">
-        All 15 tools live in one MCP server. At startup, <code>filter_tools()</code> splits them into subsets so each specialist only sees its own tools.
+        All 19 tools live in one MCP server. At startup, <code>filter_tools()</code> splits them into subsets so each specialist only sees its own tools. File write tools are gated by <code>HumanInTheLoopMiddleware</code>.
       </div>
     </div>
   </div>
@@ -1145,6 +1216,105 @@
     </div>
   </div>
 
+  <!-- Human-in-the-Loop Example -->
+  <div class="chained-section">
+    <div class="chained-header">
+      <h2>Human-in-the-Loop: File Write Approval</h2>
+      <p>When the supervisor calls <code>ask_scribe_write</code>, the <code>HumanInTheLoopMiddleware</code> fires an interrupt before execution. The CLI prompts the user to approve, reject, or edit the operation. The graph resumes only after a decision.</p>
+    </div>
+
+    <!-- HITL user input -->
+    <div class="glass user-block" style="margin-bottom: 20px;">
+      <div class="section-label">File Write Request</div>
+      <div class="user-prompt">"Create a file called notes.txt with 'hello world'"</div>
+    </div>
+
+    <div class="flow-connector">
+      <div class="flow-arrow">
+        <div class="flow-line"></div>
+        <div class="flow-arrow-head"></div>
+      </div>
+    </div>
+
+    <!-- HITL Timeline -->
+    <div class="glass" style="padding: 28px 32px; margin-bottom: 20px;">
+      <div class="section-label">Supervisor ReAct Loop &mdash; Interrupt &amp; Resume Trace</div>
+
+      <div class="timeline">
+
+        <!-- Step 1: Supervisor delegates -->
+        <div class="glass-inner timeline-step supervisor-step">
+          <div class="timeline-dot"></div>
+          <div class="loop-badge loop-1">react loop &mdash; iteration 1</div>
+          <div class="timeline-agent">Supervisor</div>
+          <div class="timeline-action">Recognizes a file write request, calls the Scribe write tool</div>
+          <div class="timeline-detail">
+            <span class="key">tool_call:</span> <span class="val">ask_scribe_write("create a file named 'notes.txt' with the content 'hello world'")</span>
+          </div>
+        </div>
+
+        <!-- Step 2: Middleware interrupts -->
+        <div class="glass-inner timeline-step hitl-step">
+          <div class="timeline-dot"></div>
+          <div class="timeline-agent">HumanInTheLoopMiddleware &mdash; Interrupt</div>
+          <div class="timeline-action">Middleware detects <code>ask_scribe_write</code> in the interrupt_on config, fires <code>interrupt()</code></div>
+          <div class="timeline-detail">
+            <span class="key">interrupt_on:</span> <span class="val">{"ask_scribe_write": True}</span><br>
+            <span class="key">action:</span> <span class="val">Graph execution paused. HITLRequest sent to CLI.</span><br>
+            <span class="key">state:</span> <span class="val">Checkpointed by MemorySaver &mdash; resumable.</span>
+          </div>
+        </div>
+
+        <!-- Step 3: User prompt -->
+        <div class="glass-inner timeline-step output-step">
+          <div class="timeline-dot"></div>
+          <div class="timeline-agent">User Decision</div>
+          <div class="timeline-action">CLI displays the tool call and prompts for approve / reject / edit</div>
+          <div class="timeline-detail">
+            <span class="val">&#9484;&#9472;&#9472; Approval Required &#9472;&#9472;&#9488;</span><br>
+            <span class="val">&#9474; Tool: ask_scribe_write &nbsp;&#9474;</span><br>
+            <span class="val">&#9474; Args: {"request": "..."} &#9474;</span><br>
+            <span class="val">&#9492;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9496;</span><br>
+            <span class="result">User enters: a (approve)</span>
+          </div>
+        </div>
+
+        <!-- Step 4: Resume with Command -->
+        <div class="glass-inner timeline-step hitl-step">
+          <div class="timeline-dot"></div>
+          <div class="timeline-agent">Command(resume=HITLResponse)</div>
+          <div class="timeline-action">CLI builds a resume command with the user's decision, graph resumes</div>
+          <div class="timeline-detail">
+            <span class="key">decisions:</span> <span class="val">[ApproveDecision(type="approve")]</span><br>
+            <span class="key">action:</span> <span class="val">Graph resumes from checkpoint. Tool call proceeds.</span>
+          </div>
+        </div>
+
+        <!-- Step 5: Scribe executes -->
+        <div class="glass-inner timeline-step file-step">
+          <div class="timeline-dot"></div>
+          <div class="timeline-agent">Scribe</div>
+          <div class="timeline-action">Receives request, calls <code>create_file</code> tool</div>
+          <div class="timeline-detail">
+            <span class="key">tool:</span> <span class="val">create_file("notes.txt", "hello world")</span><br>
+            <span class="key">return:</span> <span class="result">"Created notes.txt"</span>
+          </div>
+        </div>
+
+        <!-- Step 6: Final output -->
+        <div class="glass-inner timeline-step output-step">
+          <div class="timeline-dot"></div>
+          <div class="timeline-agent">Final Response</div>
+          <div class="timeline-action">Delivered to the user</div>
+          <div class="timeline-detail">
+            <span class="result">"Done! I've created notes.txt with the content 'hello world'."</span>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
   <!-- Legend -->
   <div class="glass legend">
     <div class="section-label" style="color:#6b6b80;">Key Concepts</div>
@@ -1182,6 +1352,20 @@
         <div class="legend-text">
           <strong>Context Isolation</strong>
           Specialists never see the supervisor's routing logic. Each gets a clean context with only its system prompt and the user's request.
+        </div>
+      </div>
+      <div class="legend-item">
+        <div class="legend-dot" style="background:#ef4444;"></div>
+        <div class="legend-text">
+          <strong>Human-in-the-Loop</strong>
+          Write tools trigger an interrupt via HumanInTheLoopMiddleware. The user approves, rejects, or edits the operation before the graph resumes.
+        </div>
+      </div>
+      <div class="legend-item">
+        <div class="legend-dot" style="background:#f59e0b;"></div>
+        <div class="legend-text">
+          <strong>Two-Tier File Tools</strong>
+          Read tools (read_file, list_files) are auto-approved. Write tools (create_file, delete_file) require explicit human approval.
         </div>
       </div>
       <div class="legend-item">

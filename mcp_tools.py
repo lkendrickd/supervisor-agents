@@ -7,7 +7,8 @@ Tools are organized by category so supervisor.py can assign subsets
 to specialist agents:
   - Math:    add, multiply, sqrt, divide, power, percentage, random_number, generate_uuid
   - Text:    word_count, char_count, to_uppercase, to_lowercase, reverse_text
-  - Utility: now, date_diff
+  - Time:    now, date_diff
+  - File:    read_file, list_files, create_file, delete_file
 
   uv run python mcp_tools.py         # standalone (prints to stdout)
 """
@@ -16,6 +17,7 @@ import math
 import datetime
 import uuid
 import random
+import os
 
 from mcp.server.fastmcp import FastMCP
 
@@ -67,6 +69,18 @@ def percentage(value: float, total: float) -> float:
     return (value / total) * 100
 
 
+@mcp.tool()
+def random_number(min_val: int = 1, max_val: int = 100) -> int:
+    """Generate a random integer between min_val and max_val (inclusive). Defaults to 1-100."""
+    return random.randint(min_val, max_val)
+
+
+@mcp.tool()
+def generate_uuid() -> str:
+    """Generate a random UUID."""
+    return str(uuid.uuid4())
+
+
 # ─────────────────────────────────────────────
 # TEXT TOOLS
 # ─────────────────────────────────────────────
@@ -103,20 +117,14 @@ def reverse_text(text: str) -> str:
 
 
 # ─────────────────────────────────────────────
-# UTILITY TOOLS
+# TIME TOOLS
 # ─────────────────────────────────────────────
 
 
 @mcp.tool()
 def now() -> str:
     """Return the current date and time in ISO-8601 format."""
-    return datetime.datetime.now().isoformat()
-
-
-@mcp.tool()
-def generate_uuid() -> str:
-    """Generate a random UUID."""
-    return str(uuid.uuid4())
+    return datetime.datetime.now(datetime.timezone.utc).isoformat()
 
 
 @mcp.tool()
@@ -127,10 +135,61 @@ def date_diff(date1: str, date2: str) -> int:
     return abs((d2 - d1).days)
 
 
+# ─────────────────────────────────────────────
+# FILE TOOLS
+# ─────────────────────────────────────────────
+
+PROJECT_DIR = os.environ.get(
+    "MCP_PROJECT_DIR", os.path.dirname(os.path.abspath(__file__))
+)
+
+
+def _safe_path(path: str) -> str:
+    """Resolve *path* relative to PROJECT_DIR and reject traversal attempts."""
+    resolved = os.path.normpath(os.path.join(PROJECT_DIR, path))
+    if not resolved.startswith(os.path.normpath(PROJECT_DIR)):
+        raise ValueError(f"Path '{path}' escapes the project directory")
+    return resolved
+
+
 @mcp.tool()
-def random_number(min_val: int = 1, max_val: int = 100) -> int:
-    """Generate a random integer between min_val and max_val (inclusive). Defaults to 1-100."""
-    return random.randint(min_val, max_val)
+def read_file(path: str) -> str:
+    """Read and return the contents of a file. Path is relative to the project root."""
+    resolved = _safe_path(path)
+    if not os.path.isfile(resolved):
+        return f"Error: file '{path}' does not exist."
+    with open(resolved, encoding="utf-8") as f:
+        return f.read()
+
+
+@mcp.tool()
+def list_files(directory: str = ".") -> str:
+    """List entries in a directory. Returns one entry per line. Path is relative to the project root."""
+    resolved = _safe_path(directory)
+    if not os.path.isdir(resolved):
+        return f"Error: directory '{directory}' does not exist."
+    entries = sorted(os.listdir(resolved))
+    return "\n".join(entries)
+
+
+@mcp.tool()
+def create_file(path: str, content: str) -> str:
+    """Create (or overwrite) a file with the given content. Path is relative to the project root."""
+    resolved = _safe_path(path)
+    os.makedirs(os.path.dirname(resolved) or ".", exist_ok=True)
+    with open(resolved, "w", encoding="utf-8") as f:
+        f.write(content)
+    return f"Created {path}"
+
+
+@mcp.tool()
+def delete_file(path: str) -> str:
+    """Delete a file. Path is relative to the project root."""
+    resolved = _safe_path(path)
+    if not os.path.isfile(resolved):
+        return f"Error: file '{path}' does not exist."
+    os.remove(resolved)
+    return f"Deleted {path}"
 
 
 if __name__ == "__main__":

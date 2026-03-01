@@ -10,6 +10,8 @@ from supervisor import (
     MATH_TOOL_NAMES,
     TEXT_TOOL_NAMES,
     UTILITY_TOOL_NAMES,
+    FILE_READ_TOOL_NAMES,
+    FILE_WRITE_TOOL_NAMES,
     filter_tools,
 )
 
@@ -31,12 +33,25 @@ ALL_TOOL_NAMES = {
     "generate_uuid",
     "date_diff",
     "random_number",
+    "read_file",
+    "list_files",
+    "create_file",
+    "delete_file",
 }
 
 
 def _fake_tools(names: set[str]) -> list:
     """Create fake tool objects with a .name attribute."""
     return [SimpleNamespace(name=n) for n in names]
+
+
+ALL_SETS = [
+    MATH_TOOL_NAMES,
+    TEXT_TOOL_NAMES,
+    UTILITY_TOOL_NAMES,
+    FILE_READ_TOOL_NAMES,
+    FILE_WRITE_TOOL_NAMES,
+]
 
 
 class TestToolNameSets:
@@ -49,8 +64,35 @@ class TestToolNameSets:
     def test_no_overlap_text_utility(self):
         assert TEXT_TOOL_NAMES & UTILITY_TOOL_NAMES == set()
 
+    def test_no_overlap_file_read_write(self):
+        assert FILE_READ_TOOL_NAMES & FILE_WRITE_TOOL_NAMES == set()
+
+    def test_no_overlap_file_read_math(self):
+        assert FILE_READ_TOOL_NAMES & MATH_TOOL_NAMES == set()
+
+    def test_no_overlap_file_read_text(self):
+        assert FILE_READ_TOOL_NAMES & TEXT_TOOL_NAMES == set()
+
+    def test_no_overlap_file_read_utility(self):
+        assert FILE_READ_TOOL_NAMES & UTILITY_TOOL_NAMES == set()
+
+    def test_no_overlap_file_write_math(self):
+        assert FILE_WRITE_TOOL_NAMES & MATH_TOOL_NAMES == set()
+
+    def test_no_overlap_file_write_text(self):
+        assert FILE_WRITE_TOOL_NAMES & TEXT_TOOL_NAMES == set()
+
+    def test_no_overlap_file_write_utility(self):
+        assert FILE_WRITE_TOOL_NAMES & UTILITY_TOOL_NAMES == set()
+
     def test_all_tools_assigned(self):
-        assigned = MATH_TOOL_NAMES | TEXT_TOOL_NAMES | UTILITY_TOOL_NAMES
+        assigned = (
+            MATH_TOOL_NAMES
+            | TEXT_TOOL_NAMES
+            | UTILITY_TOOL_NAMES
+            | FILE_READ_TOOL_NAMES
+            | FILE_WRITE_TOOL_NAMES
+        )
         assert assigned == ALL_TOOL_NAMES
 
     def test_random_number_in_math(self):
@@ -64,6 +106,18 @@ class TestToolNameSets:
 
     def test_date_diff_in_utility(self):
         assert "date_diff" in UTILITY_TOOL_NAMES
+
+    def test_read_file_in_file_read(self):
+        assert "read_file" in FILE_READ_TOOL_NAMES
+
+    def test_list_files_in_file_read(self):
+        assert "list_files" in FILE_READ_TOOL_NAMES
+
+    def test_create_file_in_file_write(self):
+        assert "create_file" in FILE_WRITE_TOOL_NAMES
+
+    def test_delete_file_in_file_write(self):
+        assert "delete_file" in FILE_WRITE_TOOL_NAMES
 
 
 class TestFilterTools:
@@ -91,6 +145,26 @@ class TestFilterTools:
 
     def test_empty_tools(self):
         assert filter_tools([], MATH_TOOL_NAMES) == []
+
+    def test_filters_file_read(self):
+        all_tools = _fake_tools(ALL_TOOL_NAMES)
+        file_read = filter_tools(all_tools, FILE_READ_TOOL_NAMES)
+        names = {t.name for t in file_read}
+        assert names == FILE_READ_TOOL_NAMES
+
+    def test_filters_file_write(self):
+        all_tools = _fake_tools(ALL_TOOL_NAMES)
+        file_write = filter_tools(all_tools, FILE_WRITE_TOOL_NAMES)
+        names = {t.name for t in file_write}
+        assert names == FILE_WRITE_TOOL_NAMES
+
+    def test_filters_all_file_tools(self):
+        all_tools = _fake_tools(ALL_TOOL_NAMES)
+        file_tools = filter_tools(
+            all_tools, FILE_READ_TOOL_NAMES | FILE_WRITE_TOOL_NAMES
+        )
+        names = {t.name for t in file_tools}
+        assert names == FILE_READ_TOOL_NAMES | FILE_WRITE_TOOL_NAMES
 
     def test_unknown_names_ignored(self):
         all_tools = _fake_tools({"add", "multiply"})
