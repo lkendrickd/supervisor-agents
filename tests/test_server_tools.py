@@ -1,4 +1,4 @@
-"""Tests for the MCP tool functions in server.py.
+"""Tests for the MCP tool functions in mcp_tools.py.
 
 These are plain functions under the @mcp.tool() decorator,
 so we can call them directly.
@@ -9,7 +9,7 @@ import uuid
 
 import pytest
 
-from server import (
+from mcp_tools import (
     add,
     multiply,
     sqrt,

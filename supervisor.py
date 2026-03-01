@@ -67,14 +67,14 @@ specialist_llm = ChatOpenAI(model=SPECIALIST_MODEL, **_openrouter_kwargs)
 
 # ─────────────────────────────────────────────
 # 2. MCP SERVER CONFIG
-#    The MCP client spawns server.py as a
+#    The MCP client spawns mcp_tools.py as a
 #    subprocess and talks to it over stdin/stdout.
 # ─────────────────────────────────────────────
 
 MCP_SERVERS: dict[str, dict[str, Any]] = {
     "my_tools": {
         "command": "uv",
-        "args": ["run", "python", "server.py"],
+        "args": ["run", "python", "mcp_tools.py"],
         "transport": "stdio",
     },
 }

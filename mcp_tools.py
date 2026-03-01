@@ -1,17 +1,15 @@
 """
-server.py
-=========
-Minimal MCP tool server for testing the agent.
+mcp_tools.py
+============
+MCP tool server. Runs over stdio — supervisor.py spawns this as a subprocess.
 
-Runs over stdio — the agent_server.py spawns this as a subprocess.
-
-Tools are organized by category so multi_agent.py can assign subsets
+Tools are organized by category so supervisor.py can assign subsets
 to specialist agents:
-  - Math:    add, multiply, sqrt, divide, power, percentage
+  - Math:    add, multiply, sqrt, divide, power, percentage, random_number, generate_uuid
   - Text:    word_count, char_count, to_uppercase, to_lowercase, reverse_text
-  - Utility: now, generate_uuid, date_diff, random_number
+  - Utility: now, date_diff
 
-  uv run python server.py            # standalone (prints to stdout)
+  uv run python mcp_tools.py         # standalone (prints to stdout)
 """
 
 import math

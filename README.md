@@ -63,7 +63,7 @@ uv run python supervisor.py
 | File | What it does |
 |---|---|
 | `supervisor.py` | Supervisor agent, specialist wrappers |
-| `server.py` | MCP tool server (spawned via stdio) |
+| `mcp_tools.py` | MCP tool server (spawned via stdio) |
 | `blueprint.html` | Architecture diagram |
 | `Makefile` | Shortcuts |
 
@@ -73,5 +73,5 @@ Keep in mind that the performance and correct tool calling depend heavily on the
 
 - LLM calls go through [OpenRouter](https://openrouter.ai). Set `SUPERVISOR_MODEL` and `SPECIALIST_MODEL` in `.env` to swap models.
 - The supervisor only sees final answers from specialists, not intermediate reasoning. If it misreads a result, you can change the `@tool` wrappers to return steps alongside the answer.
-- Tools are served via MCP over stdio. The client spawns `server.py` as a subprocess on startup, loads all tools, then `filter_tools()` splits them across specialists.
+- Tools are served via MCP over stdio. The client spawns `mcp_tools.py` as a subprocess on startup, loads all tools, then `filter_tools()` splits them across specialists.
 - In a real deployment you'd run the MCP server as a standalone service over Streamable HTTP instead of spawning it inline. The subprocess approach here keeps the demo to one `uv run` command.

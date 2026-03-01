@@ -14,7 +14,7 @@ from supervisor import (
 )
 
 
-# All tool names that the MCP server exposes (must stay in sync with server.py).
+# All tool names that the MCP server exposes (must stay in sync with mcp_tools.py).
 ALL_TOOL_NAMES = {
     "add",
     "multiply",
