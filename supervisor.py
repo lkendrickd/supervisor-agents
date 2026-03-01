@@ -40,24 +40,29 @@ from rich.console import Console
 from rich.panel import Panel
 from rich.markdown import Markdown
 
-load_dotenv()
+load_dotenv(override=True)
 
 
 # ─────────────────────────────────────────────
 # 1. MODEL CONFIG
 #    Uses OpenRouter as the LLM provider via the
-#    OpenAI-compatible API. Swap MODEL_NAME to
-#    use any model OpenRouter supports.
+#    OpenAI-compatible API. SUPERVISOR_MODEL runs
+#    the orchestrator, SPECIALIST_MODEL runs the
+#    agents. Set SPECIALIST_MODEL to a cheaper
+#    model to save costs on tool-calling tasks.
 # ─────────────────────────────────────────────
 
-MODEL_NAME = "google/gemini-2.5-flash"
+SUPERVISOR_MODEL = os.environ.get("SUPERVISOR_MODEL", "google/gemini-2.5-flash")
+SPECIALIST_MODEL = os.environ.get("SPECIALIST_MODEL", SUPERVISOR_MODEL)
 
-llm = ChatOpenAI(
-    model=MODEL_NAME,
-    max_completion_tokens=1024,
-    base_url="https://openrouter.ai/api/v1",
-    api_key=SecretStr(os.environ["OPENROUTER_API_KEY"]),
-)
+_openrouter_kwargs = {
+    "max_completion_tokens": 1024,
+    "base_url": "https://openrouter.ai/api/v1",
+    "api_key": SecretStr(os.environ["OPENROUTER_API_KEY"]),
+}
+
+supervisor_llm = ChatOpenAI(model=SUPERVISOR_MODEL, **_openrouter_kwargs)
+specialist_llm = ChatOpenAI(model=SPECIALIST_MODEL, **_openrouter_kwargs)
 
 
 # ─────────────────────────────────────────────
@@ -127,7 +132,7 @@ def create_specialists(all_tools: list) -> dict:
     utility_tools = filter_tools(all_tools, UTILITY_TOOL_NAMES)
 
     mathematician = create_agent(
-        model=llm,
+        model=specialist_llm,
         tools=math_tools,
         system_prompt="You are the Mathematician — a precise, methodical specialist. "
         "Show your work step by step. You have tools for arithmetic, "
@@ -140,7 +145,7 @@ def create_specialists(all_tools: list) -> dict:
     )
 
     wordsmith = create_agent(
-        model=llm,
+        model=specialist_llm,
         tools=text_tools,
         system_prompt="You are the Wordsmith — a text processing specialist. "
         "You handle word counts, character counts, case conversion, "
@@ -152,7 +157,7 @@ def create_specialists(all_tools: list) -> dict:
     )
 
     timekeeper = create_agent(
-        model=llm,
+        model=specialist_llm,
         tools=utility_tools,
         system_prompt="You are the Timekeeper — a temporal specialist. "
         "You handle time queries and date calculations. Be precise with formats. "
@@ -232,7 +237,7 @@ def create_supervisor(specialists: dict):
         return result["messages"][-1].content
 
     supervisor = create_agent(
-        model=llm,
+        model=supervisor_llm,
         tools=[ask_mathematician, ask_wordsmith, ask_timekeeper],
         system_prompt="You are a supervisor coordinating three specialist agents:\n"
         "  - Mathematician: math, calculations, random numbers, UUIDs\n"
@@ -262,25 +267,14 @@ def create_supervisor(specialists: dict):
 # ─────────────────────────────────────────────
 
 
-async def main():
+async def cli(supervisor) -> None:
+    """Interactive chat loop with conversation memory and delegation tracing."""
     console = Console()
 
-    # ── Load tools from MCP server ──
-    console.print("[dim]Loading tools from MCP server...[/dim]")
-
-    client = MultiServerMCPClient(MCP_SERVERS)  # type: ignore[arg-type]
-    all_tools = await client.get_tools()
-    tool_names = [t.name for t in all_tools]
-    console.print(f"[dim]Loaded {len(all_tools)} tools: {tool_names}[/dim]")
-
-    # ── Build agents ──
-    specialists = create_specialists(all_tools)
-    supervisor = create_supervisor(specialists)
-
-    # ── Banner ──
     console.print(
         Panel(
-            f"Model: [bold]{MODEL_NAME}[/bold]\n"
+            f"Supervisor: [bold]{SUPERVISOR_MODEL}[/bold]\n"
+            f"Specialists: [bold]{SPECIALIST_MODEL}[/bold]\n"
             f"Pattern: [bold]supervisor[/bold] (agents-as-tools)\n"
             f"Specialists: Mathematician, Wordsmith, Timekeeper\n"
             "Type [bold]exit[/bold] or [bold]quit[/bold] to leave.\n\n"
@@ -296,10 +290,8 @@ async def main():
         )
     )
 
-    # ── Conversation memory ──
     messages: list[dict] = []
 
-    # ── Chat loop ──
     while True:
         try:
             user_input = console.input("\n[bold green]You:[/bold green] ")
@@ -316,7 +308,6 @@ async def main():
 
         messages.append({"role": "user", "content": user_input})
 
-        # ── Stream with delegation steps ──
         last_msg = None
         async for chunk in supervisor.astream(
             {"messages": messages},  # type: ignore[arg-type]
@@ -324,7 +315,6 @@ async def main():
         ):
             last_msg = chunk["messages"][-1]
 
-            # Show delegation steps (tool calls to sub-agents) in dim text.
             if hasattr(last_msg, "tool_calls") and last_msg.tool_calls:
                 for tc in last_msg.tool_calls:
                     console.print(
@@ -345,6 +335,21 @@ async def main():
                     border_style="cyan",
                 )
             )
+
+
+async def main():
+    console = Console()
+
+    console.print("[dim]Loading tools from MCP server...[/dim]")
+    client = MultiServerMCPClient(MCP_SERVERS)  # type: ignore[arg-type]
+    all_tools = await client.get_tools()
+    tool_names = [t.name for t in all_tools]
+    console.print(f"[dim]Loaded {len(all_tools)} tools: {tool_names}[/dim]")
+
+    specialists = create_specialists(all_tools)
+    supervisor = create_supervisor(specialists)
+
+    await cli(supervisor)
 
 
 if __name__ == "__main__":
