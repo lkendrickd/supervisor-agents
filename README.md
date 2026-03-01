@@ -13,8 +13,7 @@ The supervisor is a ReAct agent. Its only "tools" are the four specialists, wrap
 | Mathematician | add, multiply, divide, sqrt, power, percentage, random_number, generate_uuid | Arithmetic, exponentiation, percentages, random numbers, UUIDs |
 | Wordsmith | word_count, char_count, to_uppercase, to_lowercase, reverse_text | Text processing, string manipulation |
 | Timekeeper | now, date_diff | Time queries, date calculations |
-| Scribe (read) | read_file, list_files | Read file contents, list directory entries — auto-approved |
-| Scribe (write) | create_file, delete_file | Create/overwrite files, delete files — requires human approval |
+| Scribe | read_file, list_files, create_file, delete_file | File operations — reads auto-approved, writes require human approval |
 
 ### Human-in-the-loop (HITL)
 

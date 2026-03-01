@@ -344,6 +344,11 @@ async def handle_interrupt(interrupts, console) -> Command:
 
     for intr in interrupts:
         hitl_request = intr.value
+        if not isinstance(hitl_request, dict) or "action_requests" not in hitl_request:
+            console.print(
+                f"  [dim italic]unexpected interrupt: {hitl_request}[/dim italic]"
+            )
+            continue
         for action in hitl_request["action_requests"]:
             console.print(
                 Panel(
